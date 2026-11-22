@@ -1,127 +1,330 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { 
-  BookOpen, Briefcase, GraduationCap, Activity, DollarSign, HeartPulse,
-  LayoutDashboard, Plus, Trash2, Sparkles, Search, Tag, FolderPlus, X, Feather, Image as ImageIcon, Edit3, LogOut, Menu, ArrowUpDown, CheckCircle2, Download, Camera, Maximize2 
+import {
+  BookOpen,
+  Briefcase,
+  GraduationCap,
+  Activity,
+  DollarSign,
+  LayoutDashboard,
+  Plus,
+  Trash2,
+  Sparkles,
+  Search,
+  Tag,
+  FolderPlus,
+  X,
+  Feather,
+  Image as ImageIcon,
+  Edit3,
+  LogOut,
+  Menu,
+  Maximize2,
+  Camera,
+  BookmarkCheck,
+  Download,
+  Globe,
+  Quote,
+  Bold,
+  Italic,
+  Copy,
+  Check,
+  FileText,
+  Pin,
+  CalendarHeart,
+  FileJson,
+  FileCode2,
 } from 'lucide-react';
 
-// Initialize Supabase Client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
+const supabase =
+  supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 const DEFAULT_SECTIONS = [
   { id: 'work', name: 'Work', icon: 'Briefcase' },
   { id: 'books', name: 'Books', icon: 'BookOpen' },
-  { id: 'health', name: 'Health', icon: 'HeartPulse' },
+  { id: 'health', name: 'Health', icon: 'Activity' },
   { id: 'study', name: 'Study', icon: 'GraduationCap' },
-  { id: 'running', name: 'Running', icon: 'Activity' },
   { id: 'money', name: 'Money', icon: 'DollarSign' },
+  { id: 'misc', name: 'Misc', icon: 'Feather' },
 ];
 
-const HEAD_PRESET_TAGS = {
+const DEFAULT_SECTION_IDS = new Set(DEFAULT_SECTIONS.map((s) => s.id));
+
+const ICON_MAP = {
+  Briefcase,
+  GraduationCap,
+  Activity,
+  DollarSign,
+  BookOpen,
+  Feather,
+};
+
+const QUICK_TAGS_BY_SECTION = {
   books: ['running-channel', 'work', 'life', 'book-club'],
   health: ['running-channel', 'life'],
 };
 
 const IG_THEMES = {
   mahogany: {
-    label: 'Mahogany',
-    bgOuter: '#140d08',
-    bgCard: '#1f150e',
-    borderCol: '#70492c',
-    accentCol: '#c9a26d',
-    titleCol: '#f7efe0',
-    bodyCol: '#d6c4a5',
-    mutedCol: '#9c7d56',
-    previewClass: 'bg-[#1f150e] border-[#70492c] text-[#f7efe0]',
-    headerClass: 'text-[#c9a26d] border-[#70492c]/60',
-    bodyClass: 'text-[#d6c4a5]',
-    footerClass: 'text-[#9c7d56] border-[#70492c]/40',
+    label: 'Mahogany & Gold',
+    bg: '#1c120b',
+    border: '#b88b4a',
+    accent: '#e3be82',
+    text: '#f6eedc',
+    muted: '#bfa37a',
+    badgeBg: '#2e1d12',
   },
   parchment: {
-    label: 'Parchment',
-    bgOuter: '#e3d5b8',
-    bgCard: '#f5ecd8',
-    borderCol: '#7c5836',
-    accentCol: '#5c3a21',
-    titleCol: '#21140b',
-    bodyCol: '#3d2817',
-    mutedCol: '#70492c',
-    previewClass: 'bg-[#f5ecd8] border-[#7c5836] text-[#21140b]',
-    headerClass: 'text-[#5c3a21] border-[#7c5836]/60',
-    bodyClass: 'text-[#3d2817]',
-    footerClass: 'text-[#70492c] border-[#7c5836]/40',
+    label: 'Sepia Parchment',
+    bg: '#f2e6cf',
+    border: '#6d4728',
+    accent: '#7c3f1d',
+    text: '#23160d',
+    muted: '#5c432c',
+    badgeBg: '#e4d3b3',
   },
   library: {
     label: 'Library Ink',
-    bgOuter: '#111412',
-    bgCard: '#191f1b',
-    borderCol: '#5c6b58',
-    accentCol: '#b7c4a8',
-    titleCol: '#eff3ea',
-    bodyCol: '#c8d1be',
-    mutedCol: '#88967c',
-    previewClass: 'bg-[#191f1b] border-[#5c6b58] text-[#eff3ea]',
-    headerClass: 'text-[#b7c4a8] border-[#5c6b58]/60',
-    bodyClass: 'text-[#c8d1be]',
-    footerClass: 'text-[#88967c] border-[#5c6b58]/40',
+    bg: '#141916',
+    border: '#7d9276',
+    accent: '#b7cca8',
+    text: '#edf2e8',
+    muted: '#9fb096',
+    badgeBg: '#1f2822',
   },
 };
 
-const ICON_MAP = {
-  Briefcase: Briefcase,
-  BookOpen: BookOpen,
-  HeartPulse: HeartPulse,
-  GraduationCap: GraduationCap,
-  Activity: Activity,
-  DollarSign: DollarSign,
-};
+function formatSectionLabelFromId(sectionId) {
+  return String(sectionId || '')
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
-const normalizeTag = (tag) => tag.trim().toLowerCase().replace(/^#+/, '').replace(/\s+/g, '-');
+function parseTagsInput(raw) {
+  return raw
+    .split(',')
+    .map((t) => t.trim().replace(/^#+/, '').toLowerCase())
+    .filter(Boolean);
+}
 
-function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 18) {
-  const paragraphs = String(text || '').split('\n');
-  let currentY = y;
-  let lineCount = 0;
-
-  for (let p = 0; p < paragraphs.length; p++) {
-    const words = paragraphs[p].split(/\s+/).filter(Boolean);
-    let line = '';
-
-    for (let n = 0; n < words.length; n++) {
-      const testLine = line ? `${line} ${words[n]}` : words[n];
-      const metrics = ctx.measureText(testLine);
-      if (metrics.width > maxWidth && line) {
-        if (lineCount >= maxLines - 1) {
-          ctx.fillText(`${line.slice(0, Math.max(0, line.length - 3))}...`, x, currentY);
-          return currentY + lineHeight;
-        }
-        ctx.fillText(line, x, currentY);
-        line = words[n];
-        currentY += lineHeight;
-        lineCount += 1;
-      } else {
-        line = testLine;
-      }
-    }
-
-    if (line) {
-      if (lineCount >= maxLines - 1 && p < paragraphs.length - 1) {
-        ctx.fillText(`${line.slice(0, Math.max(0, line.length - 3))}...`, x, currentY);
-        return currentY + lineHeight;
-      }
-      ctx.fillText(line, x, currentY);
-      currentY += lineHeight;
-      lineCount += 1;
-    }
-
-    if (p < paragraphs.length - 1) {
-      currentY += lineHeight * 0.45;
+function parseEntryMonthDay(entry) {
+  const candidates = [entry?.createdAt, entry?.date].filter(Boolean);
+  for (const raw of candidates) {
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      return {
+        month: parsed.getMonth(),
+        day: parsed.getDate(),
+        year: parsed.getFullYear(),
+      };
     }
   }
+  return null;
+}
 
-  return currentY;
+function extractScreenshotStoragePath(imageUrl) {
+  if (!imageUrl || typeof imageUrl !== 'string') return null;
+  if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(imageUrl, window.location.origin);
+    const decodedPath = decodeURIComponent(parsed.pathname);
+    const markers = [
+      '/storage/v1/object/public/screenshots/',
+      '/storage/v1/object/sign/screenshots/',
+      '/storage/v1/object/authenticated/screenshots/',
+      '/screenshots/',
+    ];
+
+    for (const marker of markers) {
+      const idx = decodedPath.indexOf(marker);
+      if (idx !== -1) {
+        const objectPath = decodedPath
+          .slice(idx + marker.length)
+          .replace(/^\/+/, '');
+        return objectPath || null;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function renderInlineFormatted(text, keyPrefix = 'inl') {
+  const str = String(text || '');
+  const tokenRegex = /(\*\*[^*]+\*\*|\*[^*\n]+\*)/g;
+  const parts = str.split(tokenRegex);
+
+  return parts.map((part, idx) => {
+    if (!part) return null;
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return (
+        <strong
+          key={`${keyPrefix}-b-${idx}`}
+          className="font-bold text-[#f4ebd0]"
+        >
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+      return (
+        <em key={`${keyPrefix}-i-${idx}`} className="italic text-[#f0dfc0]">
+          {part.slice(1, -1)}
+        </em>
+      );
+    }
+    return <React.Fragment key={`${keyPrefix}-t-${idx}`}>{part}</React.Fragment>;
+  });
+}
+
+function FormattedEntryBody({ content }) {
+  const raw = String(content || '');
+  if (!raw.trim()) return null;
+
+  const lines = raw.split('\n');
+  const blocks = [];
+  let quoteLines = [];
+  let paraLines = [];
+
+  const flushQuotes = () => {
+    if (quoteLines.length > 0) {
+      blocks.push({ type: 'quote', lines: [...quoteLines] });
+      quoteLines = [];
+    }
+  };
+
+  const flushPara = () => {
+    if (paraLines.length > 0) {
+      blocks.push({ type: 'para', lines: [...paraLines] });
+      paraLines = [];
+    }
+  };
+
+  lines.forEach((line) => {
+    const trimmedStart = line.trimStart();
+    if (trimmedStart.startsWith('>')) {
+      flushPara();
+      quoteLines.push(trimmedStart.replace(/^>\s?/, ''));
+    } else if (line.trim() === '') {
+      flushQuotes();
+      flushPara();
+    } else {
+      flushQuotes();
+      paraLines.push(line);
+    }
+  });
+
+  flushQuotes();
+  flushPara();
+
+  return (
+    <div className="space-y-3 text-sm text-[#e8d9be] leading-relaxed">
+      {blocks.map((block, bIdx) => {
+        if (block.type === 'quote') {
+          return (
+            <blockquote
+              key={`blk-q-${bIdx}`}
+              className="border-l-2 border-[#c9a26d] bg-[#140d08]/75 pl-3.5 pr-3 py-2 rounded-r italic text-[#f3e5c6] space-y-1"
+            >
+              {block.lines.map((qLine, lIdx) => (
+                <p key={`q-${bIdx}-${lIdx}`} className="whitespace-pre-wrap">
+                  {renderInlineFormatted(qLine, `q-${bIdx}-${lIdx}`)}
+                </p>
+              ))}
+            </blockquote>
+          );
+        }
+
+        return (
+          <p key={`blk-p-${bIdx}`} className="whitespace-pre-wrap">
+            {block.lines.map((pLine, lIdx) => (
+              <React.Fragment key={`p-${bIdx}-${lIdx}`}>
+                {lIdx > 0 && <br />}
+                {renderInlineFormatted(pLine, `p-${bIdx}-${lIdx}`)}
+              </React.Fragment>
+            ))}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function buildEntryMarkdown(entry, sectionLabel) {
+  const lines = [];
+  const heading = entry.title?.trim() || 'Untitled Note';
+  lines.push(`### ${heading}`);
+
+  const metaParts = [];
+  if (entry.isPinned) metaParts.push('Pinned');
+  if (entry.date) metaParts.push(entry.date);
+  if (sectionLabel) metaParts.push(sectionLabel);
+  if (metaParts.length > 0) {
+    lines.push(`*${metaParts.join(' • ')}*`);
+  }
+
+  if (entry.content?.trim()) {
+    lines.push('');
+    lines.push(entry.content.trim());
+  }
+
+  if (Array.isArray(entry.tags) && entry.tags.length > 0) {
+    lines.push('');
+    lines.push(entry.tags.map((t) => `#${t}`).join(' '));
+  }
+
+  if (entry.imageUrl) {
+    lines.push('');
+    lines.push(`![${heading}](${entry.imageUrl})`);
+  }
+
+  return lines.join('\n');
+}
+
+function triggerFileDownload(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function wrapCanvasText(ctx, text, maxWidth) {
+  const paragraphs = String(text || '').split('\n');
+  const lines = [];
+
+  for (const para of paragraphs) {
+    const words = para.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) {
+      lines.push('');
+      continue;
+    }
+    let current = words[0];
+    for (let i = 1; i < words.length; i++) {
+      const test = `${current} ${words[i]}`;
+      if (ctx.measureText(test).width <= maxWidth) {
+        current = test;
+      } else {
+        lines.push(current);
+        current = words[i];
+      }
+    }
+    lines.push(current);
+  }
+  return lines;
 }
 
 export default function App() {
@@ -133,99 +336,927 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
+
   const [sections, setSections] = useState(DEFAULT_SECTIONS);
   const [entries, setEntries] = useState({
     work: [],
     books: [],
     health: [],
     study: [],
-    running: [],
     money: [],
+    misc: [],
   });
 
-  // Form states
+  // Composer state
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
   const [newTags, setNewTags] = useState('');
+  const [newIsPinned, setNewIsPinned] = useState(false);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  const [existingImageUrl, setExistingImageUrl] = useState('');
   const [selectedSection, setSelectedSection] = useState('work');
+  const [isSaving, setIsSaving] = useState(false);
+
   const fileInputRef = useRef(null);
-  
-  // Edit state
+  const contentTextareaRef = useRef(null);
+
+  // Edit & copy feedback state
   const [editingEntryId, setEditingEntryId] = useState(null);
+  const [copiedEntryId, setCopiedEntryId] = useState(null);
 
-  // Search, Tag Filter, Sorting & Book Club Selection
+  // Search, scope, pin & sort state
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchAllVolumes, setSearchAllVolumes] = useState(false);
+  const [pinnedOnly, setPinnedOnly] = useState(false);
   const [selectedTagFilter, setSelectedTagFilter] = useState('ALL');
-  const [sortOrder, setSortOrder] = useState('newest');
-  const [selectedBookClubIds, setSelectedBookClubIds] = useState([]);
+  const [sortBy, setSortBy] = useState('newest');
+  const [bookClubOnly, setBookClubOnly] = useState(false);
+  const [queuedIds, setQueuedIds] = useState([]);
 
-  // Instagram Card Studio State
+  // Image lightbox state
+  const [viewingImage, setViewingImage] = useState(null);
+
+  // Instagram Card Studio modal state
   const [isIgStudioOpen, setIsIgStudioOpen] = useState(false);
-  const [igFormat, setIgFormat] = useState('square'); // 'square' (1080x1080) | 'portrait' (1080x1350)
-  const [igTheme, setIgTheme] = useState('mahogany'); // 'mahogany' | 'parchment' | 'library'
-  const [igClubName, setIgClubName] = useState('BOOK CLUB CHRONICLE');
-  const [igVolumeNote, setIgVolumeNote] = useState('');
+  const [igFormat, setIgFormat] = useState('square'); // 'square' | 'portrait'
+  const [igTheme, setIgTheme] = useState('mahogany');
+  const [igSourceNote, setIgSourceNote] = useState('');
+  const [selectedIgEntryId, setSelectedIgEntryId] = useState('');
+  const igCanvasRef = useRef(null);
 
-  // Full-Screen Image Viewer State
-  const [viewingImage, setViewingImage] = useState(null); // { src, title }
-
-  // New Section Modal
+  // Custom section modal state
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
+  const [isCreatingSection, setIsCreatingSection] = useState(false);
+  const [deletingSectionId, setDeletingSectionId] = useState(null);
 
+  // Dashboard highlights
   const [randomHighlights, setRandomHighlights] = useState({});
-
-  const presetTagsForActiveHead = HEAD_PRESET_TAGS[activeTab] || [];
-  const activeTagList = newTags
-    .split(',')
-    .map(normalizeTag)
-    .filter(Boolean);
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      setSession(currentSession);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (!session || !supabase) return;
-    fetchUserData();
-  }, [session]);
-
   const fetchUserData = async () => {
-    const { data, error } = await supabase
-      .from('entries')
-      .select('*')
-      .order('created_at', { ascending: false });
+    if (!session || !supabase) return;
 
-    if (!error && data) {
-      const grouped = {};
-      sections.forEach(s => { grouped[s.id] = []; });
-      
-      data.forEach(item => {
-        const sec = item.section_id;
+    const [
+      { data: entriesData, error: entriesError },
+      { data: sectionsData, error: sectionsError },
+    ] = await Promise.all([
+      supabase
+        .from('entries')
+        .select('*')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('sections')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: true }),
+    ]);
+
+    const mergedMap = new Map();
+    DEFAULT_SECTIONS.forEach((sec) => {
+      mergedMap.set(sec.id, { ...sec });
+    });
+
+    if (!sectionsError && Array.isArray(sectionsData)) {
+      sectionsData.forEach((row) => {
+        if (!row?.id) return;
+        mergedMap.set(row.id, {
+          id: row.id,
+          name: row.name || formatSectionLabelFromId(row.id),
+          icon: row.icon || 'Feather',
+        });
+      });
+    }
+
+    const grouped = {};
+    mergedMap.forEach((_val, secId) => {
+      grouped[secId] = [];
+    });
+
+    if (!entriesError && Array.isArray(entriesData)) {
+      entriesData.forEach((item) => {
+        const sec = item.section_id || 'work';
+        if (!mergedMap.has(sec)) {
+          mergedMap.set(sec, {
+            id: sec,
+            name: formatSectionLabelFromId(sec),
+            icon: 'Feather',
+          });
+        }
         if (!grouped[sec]) grouped[sec] = [];
         grouped[sec].push({
           id: item.id,
-          title: item.title,
-          content: item.content,
-          tags: item.tags || [],
-          imageUrl: item.image_url,
-          date: item.date
+          title: item.title || '',
+          content: item.content || '',
+          tags: Array.isArray(item.tags) ? item.tags : [],
+          imageUrl: item.image_url || '',
+          isPinned: Boolean(item.is_pinned),
+          date:
+            item.date ||
+            new Date(item.created_at || Date.now()).toLocaleDateString(
+              'en-GB',
+              { day: '2-digit', month: 'short', year: 'numeric' }
+            ),
+          createdAt: item.created_at || '',
         });
       });
-      setEntries(grouped);
     }
+
+    setSections(Array.from(mergedMap.values()));
+    setEntries(grouped);
+  };
+
+  useEffect(() => {
+    if (session && supabase) {
+      fetchUserData();
+    }
+  }, [session]);
+
+  useEffect(() => {
+    const nextHighlights = {};
+    Object.entries(entries).forEach(([secId, list]) => {
+      if (Array.isArray(list) && list.length > 0) {
+        const idx = Math.floor(Math.random() * list.length);
+        nextHighlights[secId] = list[idx];
+      }
+    });
+    setRandomHighlights(nextHighlights);
+  }, [entries]);
+
+  const allEntriesFlat = useMemo(() => {
+    return Object.entries(entries).flatMap(([secId, list]) => {
+      const secLabel = sections.find((s) => s.id === secId)?.name || secId;
+      return (list || []).map((item) => ({
+        ...item,
+        _sectionId: secId,
+        _sectionLabel: secLabel,
+      }));
+    });
+  }, [entries, sections]);
+
+  const pinnedEntries = useMemo(() => {
+    return allEntriesFlat.filter((item) => Boolean(item.isPinned));
+  }, [allEntriesFlat]);
+
+  const onThisDayEntries = useMemo(() => {
+    const now = new Date();
+    const todayMonth = now.getMonth();
+    const todayDay = now.getDate();
+
+    return allEntriesFlat.filter((item) => {
+      const parsed = parseEntryMonthDay(item);
+      if (!parsed) return false;
+      return parsed.month === todayMonth && parsed.day === todayDay;
+    });
+  }, [allEntriesFlat]);
+
+  const handleExportJson = () => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      ledger: 'Victorian Commonplace Book',
+      sectionsCount: sections.length,
+      entriesCount: allEntriesFlat.length,
+      sections,
+      entriesBySection: entries,
+    };
+
+    triggerFileDownload(
+      `commonplace-backup-${stamp}.json`,
+      JSON.stringify(payload, null, 2),
+      'application/json;charset=utf-8'
+    );
+  };
+
+  const handleExportMarkdown = () => {
+    const stamp = new Date().toISOString().slice(0, 10);
+    const lines = [
+      '# Commonplace Book Archive',
+      '',
+      `*Exported on ${new Date().toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })} • ${allEntriesFlat.length} total entries across ${sections.length} volumes*`,
+      '',
+    ];
+
+    sections.forEach((sec) => {
+      const secEntries = entries[sec.id] || [];
+      lines.push(`## ${sec.name} (${secEntries.length})`);
+      lines.push('');
+
+      if (secEntries.length === 0) {
+        lines.push('*No entries in this volume.*');
+        lines.push('');
+        return;
+      }
+
+      secEntries.forEach((entry) => {
+        lines.push(buildEntryMarkdown(entry, sec.name));
+        lines.push('');
+        lines.push('---');
+        lines.push('');
+      });
+    });
+
+    triggerFileDownload(
+      `commonplace-archive-${stamp}.md`,
+      lines.join('\n').trim() + '\n',
+      'text/markdown;charset=utf-8'
+    );
+  };
+
+  const applyFormatSnippet = (mode) => {
+    const el = contentTextareaRef.current;
+    const current = newContent || '';
+    const start = el ? el.selectionStart ?? current.length : current.length;
+    const end = el ? el.selectionEnd ?? current.length : current.length;
+    const selected = current.slice(start, end);
+
+    let replacement = '';
+    let cursorOffset = 0;
+
+    if (mode === 'quote') {
+      const target = selected || 'Inscribed passage or quote';
+      replacement = target
+        .split('\n')
+        .map((line) => `> ${line}`)
+        .join('\n');
+      cursorOffset = replacement.length;
+    } else if (mode === 'bold') {
+      const target = selected || 'bold text';
+      replacement = `**${target}**`;
+      cursorOffset = selected ? replacement.length : 2;
+    } else if (mode === 'italic') {
+      const target = selected || 'italic text';
+      replacement = `*${target}*`;
+      cursorOffset = selected ? replacement.length : 1;
+    } else if (mode === 'citation') {
+      const prefix = current && !current.endsWith('\n') ? '\n' : '';
+      replacement = `${prefix}— Author, Title, p. XX`;
+      cursorOffset = replacement.length;
+    }
+
+    const updated =
+      current.slice(0, start) + replacement + current.slice(end);
+    setNewContent(updated);
+
+    requestAnimationFrame(() => {
+      if (!contentTextareaRef.current) return;
+      contentTextareaRef.current.focus();
+      if (mode === 'bold' && !selected) {
+        contentTextareaRef.current.setSelectionRange(start + 2, start + 11);
+      } else if (mode === 'italic' && !selected) {
+        contentTextareaRef.current.setSelectionRange(start + 1, start + 12);
+      } else {
+        const pos = start + cursorOffset;
+        contentTextareaRef.current.setSelectionRange(pos, pos);
+      }
+    });
+  };
+
+  const handleCopyEntry = async (entry, secLabel) => {
+    const markdownText = buildEntryMarkdown(entry, secLabel);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(markdownText);
+      } else {
+        const helper = document.createElement('textarea');
+        helper.value = markdownText;
+        helper.style.position = 'fixed';
+        helper.style.opacity = '0';
+        document.body.appendChild(helper);
+        helper.select();
+        document.execCommand('copy');
+        document.body.removeChild(helper);
+      }
+      setCopiedEntryId(entry.id);
+      setTimeout(() => {
+        setCopiedEntryId((prev) => (prev === entry.id ? null : prev));
+      }, 1800);
+    } catch (err) {
+      console.error('Copy failed:', err);
+    }
+  };
+
+  const handleTogglePin = async (entry, secKey) => {
+    const nextPinned = !Boolean(entry.isPinned);
+
+    setEntries((prev) => ({
+      ...prev,
+      [secKey]: (prev[secKey] || []).map((item) =>
+        item.id === entry.id ? { ...item, isPinned: nextPinned } : item
+      ),
+    }));
+
+    if (supabase && session && !String(entry.id).startsWith('local-')) {
+      const { error } = await supabase
+        .from('entries')
+        .update({ is_pinned: nextPinned })
+        .eq('id', entry.id);
+
+      if (error) {
+        console.warn('Could not persist pin to Supabase:', error.message);
+      }
+    }
+  };
+
+  const attachImageFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    if (imagePreviewUrl && imagePreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
+    const blobUrl = URL.createObjectURL(file);
+    setImageFile(file);
+    setImagePreviewUrl(blobUrl);
+  };
+
+  const handlePaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          attachImageFile(file);
+          break;
+        }
+      }
+    }
+  };
+
+  const resetComposer = () => {
+    setNewTitle('');
+    setNewContent('');
+    setNewTags('');
+    setNewIsPinned(false);
+    setImageFile(null);
+    if (imagePreviewUrl && imagePreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
+    setImagePreviewUrl('');
+    setExistingImageUrl('');
+    setEditingEntryId(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const toggleQuickTag = (tagName) => {
+    const current = parseTagsInput(newTags);
+    const exists = current.includes(tagName);
+    const updated = exists
+      ? current.filter((t) => t !== tagName)
+      : [...current, tagName];
+    setNewTags(updated.join(', '));
+  };
+
+  const deleteScreenshotFromStorage = async (imageUrl) => {
+    if (!supabase || !session || !imageUrl) return;
+    const storagePath = extractScreenshotStoragePath(imageUrl);
+    if (!storagePath) return;
+
+    const { error } = await supabase.storage
+      .from('screenshots')
+      .remove([storagePath]);
+
+    if (error) {
+      console.error('Failed to remove screenshot from storage:', error.message);
+    }
+  };
+
+  const uploadScreenshotIfNeeded = async () => {
+    if (!imageFile) return existingImageUrl || '';
+    if (!supabase || !session) return imagePreviewUrl || '';
+
+    const ext = (imageFile.name.split('.').pop() || 'png').toLowerCase();
+    const filePath = `${session.user.id}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('screenshots')
+      .upload(filePath, imageFile, { upsert: false });
+
+    if (uploadError) {
+      console.error('Screenshot upload error:', uploadError.message);
+      return imagePreviewUrl || '';
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('screenshots')
+      .getPublicUrl(filePath);
+
+    return publicUrlData?.publicUrl || imagePreviewUrl || '';
+  };
+
+  const handleSaveEntry = async (e) => {
+    e.preventDefault();
+    if (
+      !newTitle.trim() &&
+      !newContent.trim() &&
+      !imageFile &&
+      !existingImageUrl
+    ) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const previousImageUrl = editingEntryId ? existingImageUrl : '';
+      const finalImageUrl = await uploadScreenshotIfNeeded();
+      const parsedTags = parseTagsInput(newTags);
+      const formattedDate = new Date().toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+
+      const sectionTarget =
+        activeTab !== 'dashboard' ? activeTab : selectedSection || 'work';
+
+      if (supabase && session) {
+        if (editingEntryId) {
+          let { error } = await supabase
+            .from('entries')
+            .update({
+              title: newTitle.trim() || 'Untitled Note',
+              content: newContent.trim(),
+              tags: parsedTags,
+              image_url: finalImageUrl || null,
+              section_id: sectionTarget,
+              is_pinned: newIsPinned,
+            })
+            .eq('id', editingEntryId);
+
+          if (error && /is_pinned/i.test(error.message)) {
+            const fallback = await supabase
+              .from('entries')
+              .update({
+                title: newTitle.trim() || 'Untitled Note',
+                content: newContent.trim(),
+                tags: parsedTags,
+                image_url: finalImageUrl || null,
+                section_id: sectionTarget,
+              })
+              .eq('id', editingEntryId);
+            error = fallback.error;
+          }
+
+          if (!error) {
+            if (previousImageUrl && previousImageUrl !== finalImageUrl) {
+              await deleteScreenshotFromStorage(previousImageUrl);
+            }
+            await fetchUserData();
+          }
+        } else {
+          let { error } = await supabase.from('entries').insert([
+            {
+              user_id: session.user.id,
+              section_id: sectionTarget,
+              title: newTitle.trim() || 'Untitled Note',
+              content: newContent.trim(),
+              tags: parsedTags,
+              image_url: finalImageUrl || null,
+              is_pinned: newIsPinned,
+              date: formattedDate,
+            },
+          ]);
+
+          if (error && /is_pinned/i.test(error.message)) {
+            const fallback = await supabase.from('entries').insert([
+              {
+                user_id: session.user.id,
+                section_id: sectionTarget,
+                title: newTitle.trim() || 'Untitled Note',
+                content: newContent.trim(),
+                tags: parsedTags,
+                image_url: finalImageUrl || null,
+                date: formattedDate,
+              },
+            ]);
+            error = fallback.error;
+          }
+
+          if (!error) {
+            await fetchUserData();
+          }
+        }
+      } else {
+        setEntries((prev) => {
+          const copy = { ...prev };
+          const list = [...(copy[sectionTarget] || [])];
+          if (editingEntryId) {
+            const idx = list.findIndex((item) => item.id === editingEntryId);
+            if (idx > -1) {
+              list[idx] = {
+                ...list[idx],
+                title: newTitle.trim() || 'Untitled Note',
+                content: newContent.trim(),
+                tags: parsedTags,
+                imageUrl: finalImageUrl,
+                isPinned: newIsPinned,
+              };
+            }
+          } else {
+            list.unshift({
+              id: `local-${Date.now()}`,
+              title: newTitle.trim() || 'Untitled Note',
+              content: newContent.trim(),
+              tags: parsedTags,
+              imageUrl: finalImageUrl,
+              isPinned: newIsPinned,
+              date: formattedDate,
+            });
+          }
+          copy[sectionTarget] = list;
+          return copy;
+        });
+      }
+
+      resetComposer();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleStartEdit = (entry, secKey) => {
+    setEditingEntryId(entry.id);
+    setSelectedSection(secKey);
+    if (activeTab !== 'dashboard') {
+      setActiveTab(secKey);
+    }
+    setNewTitle(entry.title || '');
+    setNewContent(entry.content || '');
+    setNewTags((entry.tags || []).join(', '));
+    setNewIsPinned(Boolean(entry.isPinned));
+    setExistingImageUrl(entry.imageUrl || '');
+    setImageFile(null);
+    setImagePreviewUrl('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeleteEntry = async (entryId, secKey) => {
+    const targetEntry = (entries[secKey] || []).find(
+      (item) => item.id === entryId
+    );
+    const targetImageUrl = targetEntry?.imageUrl || '';
+
+    if (supabase && session && !String(entryId).startsWith('local-')) {
+      if (targetImageUrl) {
+        await deleteScreenshotFromStorage(targetImageUrl);
+      }
+      await supabase.from('entries').delete().eq('id', entryId);
+      await fetchUserData();
+    } else {
+      if (targetImageUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(targetImageUrl);
+      }
+      setEntries((prev) => ({
+        ...prev,
+        [secKey]: (prev[secKey] || []).filter((item) => item.id !== entryId),
+      }));
+    }
+    setQueuedIds((prev) => prev.filter((id) => id !== entryId));
+  };
+
+  const handleCreateSection = async (e) => {
+    e.preventDefault();
+    const cleanName = newSectionName.trim();
+    if (!cleanName || isCreatingSection) return;
+    const id = cleanName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    if (!id) return;
+
+    setIsCreatingSection(true);
+    try {
+      const newSecObj = { id, name: cleanName, icon: 'Feather' };
+
+      if (supabase && session) {
+        const { error } = await supabase.from('sections').upsert(
+          [
+            {
+              id,
+              user_id: session.user.id,
+              name: cleanName,
+              icon: 'Feather',
+            },
+          ],
+          { onConflict: 'user_id,id' }
+        );
+
+        if (error) {
+          console.error('Failed to save custom section:', error.message);
+        } else {
+          await fetchUserData();
+        }
+      } else {
+        setSections((prev) =>
+          prev.some((s) => s.id === id) ? prev : [...prev, newSecObj]
+        );
+      }
+
+      setEntries((prev) => ({
+        ...prev,
+        [id]: prev[id] || [],
+      }));
+      setSelectedSection(id);
+      setActiveTab(id);
+      setNewSectionName('');
+      setIsSectionModalOpen(false);
+    } finally {
+      setIsCreatingSection(false);
+    }
+  };
+
+  const handleDeleteSection = async (sec) => {
+    if (!sec?.id || DEFAULT_SECTION_IDS.has(sec.id) || deletingSectionId) {
+      return;
+    }
+
+    const secEntries = entries[sec.id] || [];
+    const confirmMsg =
+      secEntries.length > 0
+        ? `Delete the "${sec.name}" volume? Its ${secEntries.length} ${
+            secEntries.length === 1 ? 'entry' : 'entries'
+          } will be transferred to Misc.`
+        : `Delete the "${sec.name}" volume?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    setDeletingSectionId(sec.id);
+    try {
+      const fallbackSec = 'misc';
+
+      if (supabase && session) {
+        if (secEntries.length > 0) {
+          const { error: moveError } = await supabase
+            .from('entries')
+            .update({ section_id: fallbackSec })
+            .eq('section_id', sec.id);
+
+          if (moveError) {
+            console.error('Failed to transfer volume entries to Misc:', moveError.message);
+            return;
+          }
+        }
+
+        const { error: delError } = await supabase
+          .from('sections')
+          .delete()
+          .eq('user_id', session.user.id)
+          .eq('id', sec.id);
+
+        if (delError) {
+          console.error('Failed to delete custom section:', delError.message);
+          return;
+        }
+
+        await fetchUserData();
+      } else {
+        setSections((prev) => prev.filter((item) => item.id !== sec.id));
+        setEntries((prev) => {
+          const copy = { ...prev };
+          const moved = copy[sec.id] || [];
+          delete copy[sec.id];
+          copy[fallbackSec] = [...moved, ...(copy[fallbackSec] || [])];
+          return copy;
+        });
+      }
+
+      if (activeTab === sec.id) {
+        setActiveTab('dashboard');
+      }
+      if (selectedSection === sec.id) {
+        setSelectedSection(fallbackSec);
+      }
+      setMobileMenuOpen(false);
+    } finally {
+      setDeletingSectionId(null);
+    }
+  };
+
+  const toggleQueueForIg = (entryId) => {
+    setQueuedIds((prev) =>
+      prev.includes(entryId)
+        ? prev.filter((id) => id !== entryId)
+        : [...prev, entryId]
+    );
+  };
+
+  const activeSectionObj = sections.find((s) => s.id === activeTab);
+  const currentSectionEntries = entries[activeTab] || [];
+
+  const availableTags = useMemo(() => {
+    const pool = searchAllVolumes
+      ? Object.values(entries).flat()
+      : currentSectionEntries;
+    const set = new Set();
+    (pool || []).forEach((item) => {
+      (item.tags || []).forEach((t) => set.add(t));
+    });
+    return Array.from(set).sort();
+  }, [entries, currentSectionEntries, searchAllVolumes]);
+
+  const filteredEntries = useMemo(() => {
+    const base = searchAllVolumes
+      ? Object.entries(entries).flatMap(([secId, list]) => {
+          const secLabel = sections.find((s) => s.id === secId)?.name || secId;
+          return (list || []).map((item) => ({
+            ...item,
+            _sectionId: secId,
+            _sectionLabel: secLabel,
+          }));
+        })
+      : (entries[activeTab] || []).map((item) => ({
+          ...item,
+          _sectionId: activeTab,
+          _sectionLabel: activeSectionObj?.name || activeTab,
+        }));
+
+    const q = searchQuery.trim().toLowerCase();
+
+    const matched = base.filter((entry) => {
+      if (pinnedOnly && !entry.isPinned) return false;
+      if (activeTab === 'books' && bookClubOnly) {
+        if (!(entry.tags || []).includes('book-club')) return false;
+      }
+      if (selectedTagFilter !== 'ALL') {
+        if (!(entry.tags || []).includes(selectedTagFilter)) return false;
+      }
+      if (q) {
+        const inTitle = (entry.title || '').toLowerCase().includes(q);
+        const inBody = (entry.content || '').toLowerCase().includes(q);
+        const inTags = (entry.tags || []).some((t) =>
+          t.toLowerCase().includes(q)
+        );
+        const inSec = (entry._sectionLabel || '').toLowerCase().includes(q);
+        if (!inTitle && !inBody && !inTags && !inSec) return false;
+      }
+      return true;
+    });
+
+    if (sortBy === 'oldest') return [...matched].reverse();
+    if (sortBy === 'title') {
+      return [...matched].sort((a, b) =>
+        (a.title || '').localeCompare(b.title || '')
+      );
+    }
+    return matched;
+  }, [
+    entries,
+    sections,
+    activeTab,
+    activeSectionObj,
+    searchAllVolumes,
+    pinnedOnly,
+    bookClubOnly,
+    selectedTagFilter,
+    searchQuery,
+    sortBy,
+  ]);
+
+  const bookClubEntries = useMemo(() => {
+    const allBooks = entries.books || [];
+    const tagged = allBooks.filter((item) =>
+      (item.tags || []).includes('book-club')
+    );
+    return tagged.length > 0 ? tagged : allBooks;
+  }, [entries.books]);
+
+  const activeIgEntry = useMemo(() => {
+    if (selectedIgEntryId) {
+      const found = bookClubEntries.find((item) => item.id === selectedIgEntryId);
+      if (found) return found;
+    }
+    if (queuedIds.length > 0) {
+      const queuedBookEntry = bookClubEntries.find((item) =>
+        queuedIds.includes(item.id)
+      );
+      if (queuedBookEntry) return queuedBookEntry;
+    }
+    return bookClubEntries[0] || null;
+  }, [bookClubEntries, selectedIgEntryId, queuedIds]);
+
+  useEffect(() => {
+    if (!isIgStudioOpen || !igCanvasRef.current) return;
+    const canvas = igCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const width = 1080;
+    const height = igFormat === 'portrait' ? 1350 : 1080;
+    canvas.width = width;
+    canvas.height = height;
+
+    const theme = IG_THEMES[igTheme] || IG_THEMES.mahogany;
+
+    ctx.fillStyle = theme.bg;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.strokeStyle = theme.border;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(48, 48, width - 96, height - 96);
+
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(64, 64, width - 128, height - 128);
+
+    ctx.fillStyle = theme.badgeBg;
+    ctx.fillRect(104, 108, 300, 44);
+    ctx.fillStyle = theme.accent;
+    ctx.font = 'bold 20px Georgia, serif';
+    ctx.fillText('COMMONPLACE • #BOOK-CLUB', 122, 137);
+
+    if (activeIgEntry?.date) {
+      ctx.fillStyle = theme.muted;
+      ctx.font = 'italic 22px Georgia, serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(activeIgEntry.date, width - 104, 137);
+      ctx.textAlign = 'left';
+    }
+
+    let cursorY = 215;
+    if (igSourceNote.trim()) {
+      ctx.fillStyle = theme.accent;
+      ctx.font = 'italic 26px Georgia, serif';
+      const noteLines = wrapCanvasText(ctx, igSourceNote.trim(), width - 208);
+      for (const line of noteLines) {
+        ctx.fillText(line, 104, cursorY);
+        cursorY += 36;
+      }
+      cursorY += 12;
+    }
+
+    ctx.fillStyle = theme.text;
+    ctx.font = 'bold 46px Georgia, serif';
+    const titleLines = wrapCanvasText(
+      ctx,
+      activeIgEntry?.title || 'Book Club Reflection',
+      width - 208
+    );
+    for (const line of titleLines) {
+      ctx.fillText(line, 104, cursorY);
+      cursorY += 58;
+    }
+
+    cursorY += 10;
+    ctx.strokeStyle = theme.border;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(104, cursorY);
+    ctx.lineTo(width - 104, cursorY);
+    ctx.stroke();
+    cursorY += 46;
+
+    ctx.fillStyle = theme.text;
+    ctx.font = '32px Georgia, serif';
+    const bodyLines = wrapCanvasText(
+      ctx,
+      activeIgEntry?.content ||
+        'Select or tag an entry in Books with #book-club to compose your card.',
+      width - 208
+    );
+    const maxBodyY = height - 135;
+    for (const line of bodyLines) {
+      if (cursorY + 46 > maxBodyY) {
+        ctx.fillText('…', 104, cursorY);
+        break;
+      }
+      if (line !== '') {
+        ctx.fillText(line, 104, cursorY);
+      }
+      cursorY += 46;
+    }
+
+    ctx.fillStyle = theme.muted;
+    ctx.font = '22px Georgia, serif';
+    ctx.fillText('THE VICTORIAN COMMONPLACE LEDGER', 104, height - 88);
+  }, [isIgStudioOpen, igFormat, igTheme, igSourceNote, activeIgEntry]);
+
+  const handleDownloadIgPng = () => {
+    if (!igCanvasRef.current) return;
+    const link = document.createElement('a');
+    link.download = `book-club-instagram-${igFormat}-${Date.now()}.png`;
+    link.href = igCanvasRef.current.toDataURL('image/png');
+    link.click();
   };
 
   const handleAuth = async (e) => {
@@ -235,13 +1266,18 @@ export default function App() {
       setAuthError('Supabase keys are missing in .env file!');
       return;
     }
-
     if (isSignUp) {
-      const { error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
+      const { error } = await supabase.auth.signUp({
+        email: authEmail,
+        password: authPassword,
+      });
       if (error) setAuthError(error.message);
       else alert('Check your email for confirmation link or sign in!');
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+      const { error } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: authPassword,
+      });
       if (error) setAuthError(error.message);
     }
   };
@@ -257,434 +1293,82 @@ export default function App() {
     setSession(null);
   };
 
-  const refreshDashboard = () => {
-    const highlights = {};
-    sections.forEach(sec => {
-      const list = entries[sec.id] || [];
-      if (list.length > 0) {
-        const randomIndex = Math.floor(Math.random() * list.length);
-        highlights[sec.id] = list[randomIndex];
-      } else {
-        highlights[sec.id] = null;
-      }
-    });
-    setRandomHighlights(highlights);
-  };
-
-  useEffect(() => {
-    refreshDashboard();
-  }, [entries, sections]);
-
-  const resetEntryForm = () => {
-    setNewTitle('');
-    setNewContent('');
-    setNewTags('');
-    setImageFile(null);
-    setImagePreviewUrl('');
-    setEditingEntryId(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const attachImageFile = (file) => {
-    if (!file || !file.type.startsWith('image/')) return;
-    setImageFile(file);
-    setImagePreviewUrl(URL.createObjectURL(file));
-  };
-
-  const handlePasteImage = (e) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith('image/')) {
-        const blob = items[i].getAsFile();
-        if (blob) {
-          const ext = blob.type.split('/')[1] || 'png';
-          const pastedFile = new File([blob], `pasted-${Date.now()}.${ext}`, { type: blob.type });
-          attachImageFile(pastedFile);
-        }
-        break;
-      }
-    }
-  };
-
-  const togglePresetTag = (tag) => {
-    const cleanTag = normalizeTag(tag);
-    const current = newTags
-      .split(',')
-      .map(normalizeTag)
-      .filter(Boolean);
-
-    const updated = current.includes(cleanTag)
-      ? current.filter(t => t !== cleanTag)
-      : [...current, cleanTag];
-
-    setNewTags(updated.join(', '));
-  };
-
-  const handleSaveEntry = async (e) => {
-    e.preventDefault();
-    if (!newTitle.trim() || !newContent.trim()) return;
-
-    const targetSection = editingEntryId ? selectedSection : activeTab;
-
-    let finalImageUrl = imagePreviewUrl || null;
-    if (imageFile && supabase) {
-      const fileExt = imageFile.name.split('.').pop() || 'png';
-      const fileName = `${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from('screenshots')
-        .upload(fileName, imageFile);
-      if (!uploadError) {
-        const { data: publicUrlData } = supabase.storage
-          .from('screenshots')
-          .getPublicUrl(fileName);
-        if (publicUrlData?.publicUrl) {
-          finalImageUrl = publicUrlData.publicUrl;
-        }
-      }
-    }
-
-    const formattedTags = Array.from(
-      new Set(
-        newTags
-          .split(',')
-          .map(normalizeTag)
-          .filter(Boolean)
-      )
-    );
-
-    const dateStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-
-    if (editingEntryId) {
-      const updatedItem = {
-        title: newTitle.trim(),
-        content: newContent.trim(),
-        tags: formattedTags,
-        ...(finalImageUrl && { image_url: finalImageUrl })
-      };
-
-      if (supabase && session) {
-        await supabase.from('entries').update(updatedItem).eq('id', editingEntryId);
-      }
-
-      setEntries(prev => ({
-        ...prev,
-        [targetSection]: (prev[targetSection] || []).map(item =>
-          item.id === editingEntryId
-            ? { ...item, ...updatedItem, imageUrl: finalImageUrl || item.imageUrl }
-            : item
-        )
-      }));
-    } else {
-      const newItem = {
-        id: Date.now().toString(),
-        title: newTitle.trim(),
-        content: newContent.trim(),
-        tags: formattedTags,
-        imageUrl: finalImageUrl,
-        date: dateStr,
-      };
-
-      if (supabase && session) {
-        await supabase.from('entries').insert([{
-          id: newItem.id,
-          user_id: session.user.id,
-          section_id: targetSection,
-          title: newItem.title,
-          content: newItem.content,
-          tags: newItem.tags,
-          image_url: newItem.imageUrl,
-          date: newItem.date
-        }]);
-      }
-
-      setEntries(prev => ({
-        ...prev,
-        [targetSection]: [newItem, ...(prev[targetSection] || [])]
-      }));
-    }
-
-    resetEntryForm();
-  };
-
-  const handleEditClick = (item) => {
-    setNewTitle(item.title);
-    setNewContent(item.content);
-    setNewTags(item.tags ? item.tags.join(', ') : '');
-    setImageFile(null);
-    setImagePreviewUrl('');
-    setEditingEntryId(item.id);
-    setSelectedSection(activeTab);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleDelete = async (sectionId, id) => {
-    if (supabase && session) {
-      await supabase.from('entries').delete().eq('id', id);
-    }
-    setEntries(prev => ({
-      ...prev,
-      [sectionId]: (prev[sectionId] || []).filter(item => item.id !== id)
-    }));
-    setSelectedBookClubIds(prev => prev.filter(itemId => itemId !== id));
-  };
-
-  const handleAddSection = (e) => {
-    e.preventDefault();
-    if (!newSectionName.trim()) return;
-    const id = newSectionName.toLowerCase().replace(/\s+/g, '-');
-    if (sections.some(s => s.id === id)) return;
-
-    const newSec = { id, name: newSectionName.trim(), icon: 'BookOpen' };
-    setSections(prev => [...prev, newSec]);
-    setEntries(prev => ({ ...prev, [id]: [] }));
-    setNewSectionName('');
-    setIsSectionModalOpen(false);
-    setSelectedSection(id);
-    setActiveTab(id);
-  };
-
-  const toggleBookClubSelection = (id) => {
-    setSelectedBookClubIds(prev =>
-      prev.includes(id) ? prev.filter(itemId => itemId !== id) : [...prev, id]
-    );
-  };
-
-  const jumpToSectionWithTag = (sectionId, tag) => {
-    setActiveTab(sectionId);
-    setSelectedSection(sectionId);
-    setSelectedTagFilter(tag);
-    setSearchQuery('');
-  };
-
-  const currentEntries = entries[activeTab] || [];
-
-  const availableSectionTags = Array.from(
-    new Set([
-      ...presetTagsForActiveHead,
-      ...currentEntries.flatMap(item => item.tags || []),
-    ])
-  );
-
-  const bookClubEntries = (entries.books || []).filter(
-    item => item.tags && item.tags.includes('book-club')
-  );
-
-  const entriesForIgCard = selectedBookClubIds.length > 0
-    ? bookClubEntries.filter(item => selectedBookClubIds.includes(item.id))
-    : bookClubEntries.slice(0, 1);
-
-  const handleDownloadIgImage = () => {
-    if (entriesForIgCard.length === 0) return;
-
-    const width = 1080;
-    const height = igFormat === 'portrait' ? 1350 : 1080;
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const theme = IG_THEMES[igTheme] || IG_THEMES.mahogany;
-
-    ctx.fillStyle = theme.bgOuter;
-    ctx.fillRect(0, 0, width, height);
-
-    const pad = 52;
-    ctx.fillStyle = theme.bgCard;
-    ctx.fillRect(pad, pad, width - pad * 2, height - pad * 2);
-
-    ctx.strokeStyle = theme.borderCol;
-    ctx.lineWidth = 4;
-    ctx.strokeRect(pad + 16, pad + 16, width - (pad + 16) * 2, height - (pad + 16) * 2);
-
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(pad + 26, pad + 26, width - (pad + 26) * 2, height - (pad + 26) * 2);
-
-    ctx.fillStyle = theme.accentCol;
-    ctx.font = '600 24px Georgia, serif';
-    ctx.fillText((igClubName || 'BOOK CLUB CHRONICLE').toUpperCase(), 112, 146);
-
-    ctx.fillStyle = theme.mutedCol;
-    ctx.font = 'italic 22px Georgia, serif';
-    ctx.fillText('#book-club', width - 235, 146);
-
-    let cursorY = 176;
-    if (igVolumeNote.trim()) {
-      ctx.fillStyle = theme.mutedCol;
-      ctx.font = 'italic 22px Georgia, serif';
-      ctx.fillText(igVolumeNote.trim(), 112, cursorY + 4);
-      cursorY += 34;
-    }
-
-    const ruleY = cursorY + 6;
-    ctx.strokeStyle = theme.borderCol;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(112, ruleY);
-    ctx.lineTo(width / 2 - 22, ruleY);
-    ctx.moveTo(width / 2 + 22, ruleY);
-    ctx.lineTo(width - 112, ruleY);
-    ctx.stroke();
-
-    ctx.fillStyle = theme.accentCol;
-    ctx.beginPath();
-    ctx.moveTo(width / 2, ruleY - 7);
-    ctx.lineTo(width / 2 + 8, ruleY);
-    ctx.lineTo(width / 2, ruleY + 7);
-    ctx.lineTo(width / 2 - 8, ruleY);
-    ctx.closePath();
-    ctx.fill();
-
-    cursorY = ruleY + 56;
-    const maxTextWidth = width - 224;
-    const cardCount = entriesForIgCard.length;
-
-    entriesForIgCard.forEach((entry, idx) => {
-      if (cursorY > height - 185) return;
-
-      ctx.fillStyle = theme.titleCol;
-      ctx.font = cardCount === 1 ? 'italic bold 44px Georgia, serif' : 'italic bold 32px Georgia, serif';
-      cursorY = wrapCanvasText(
-        ctx,
-        entry.title,
-        112,
-        cursorY,
-        maxTextWidth,
-        cardCount === 1 ? 56 : 42,
-        3
-      );
-
-      if (entry.date) {
-        ctx.fillStyle = theme.mutedCol;
-        ctx.font = '20px Georgia, serif';
-        ctx.fillText(entry.date, 112, cursorY + 4);
-        cursorY += 42;
-      }
-
-      ctx.fillStyle = theme.bodyCol;
-      ctx.font = cardCount === 1 ? '32px Georgia, serif' : '25px Georgia, serif';
-      cursorY = wrapCanvasText(
-        ctx,
-        entry.content,
-        112,
-        cursorY + 6,
-        maxTextWidth,
-        cardCount === 1 ? 46 : 35,
-        cardCount === 1 ? 14 : 6
-      );
-
-      if (idx < cardCount - 1 && cursorY < height - 210) {
-        cursorY += 16;
-        ctx.strokeStyle = theme.borderCol;
-        ctx.globalAlpha = 0.45;
-        ctx.beginPath();
-        ctx.moveTo(112, cursorY);
-        ctx.lineTo(width - 112, cursorY);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-        cursorY += 36;
-      }
-    });
-
-    ctx.strokeStyle = theme.borderCol;
-    ctx.globalAlpha = 0.45;
-    ctx.beginPath();
-    ctx.moveTo(112, height - 142);
-    ctx.lineTo(width - 112, height - 142);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-
-    ctx.fillStyle = theme.mutedCol;
-    ctx.font = 'italic 22px Georgia, serif';
-    ctx.fillText('Commonplace Chronicle · Folio & Margin', 112, height - 100);
-
-    const link = document.createElement('a');
-    link.download = `book-club-instagram-${igTheme}-${igFormat}-${Date.now()}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
-  };
-
-  const filteredEntries = currentEntries
-    .filter(item => {
-      const matchesSearch = 
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.tags && item.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())));
-      
-      const matchesTag = selectedTagFilter === 'ALL' || (item.tags && item.tags.includes(selectedTagFilter));
-      return matchesSearch && matchesTag;
-    })
-    .sort((a, b) => {
-      if (sortOrder === 'oldest') return Number(a.id) - Number(b.id);
-      if (sortOrder === 'title') return a.title.localeCompare(b.title);
-      return Number(b.id) - Number(a.id);
-    });
-
   if (supabase && !session) {
     return (
-      <div className="min-h-screen bg-[#14100c] text-[#d4c3a3] flex items-center justify-center p-6 font-serif">
-        <div className="bg-[#1f150e] border-2 border-[#3d2817] rounded-xl p-8 max-w-md w-full shadow-2xl space-y-6">
-          <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-lg bg-[#3d2817] border border-[#70492c] mx-auto flex items-center justify-center text-[#dfcaab]">
-              <Feather className="w-6 h-6" />
-            </div>
-            <h1 className="text-2xl font-bold text-[#f4ebd0] italic">Commonplace Register</h1>
-            <p className="text-xs text-[#b8976f]">Sign in to access your cloud journal across all devices</p>
+      <div className="min-h-screen bg-[#140d08] text-[#f4ebd0] flex items-center justify-center p-4 font-serif">
+        <div className="w-full max-w-md bg-[#1f150e] border-2 border-[#70492c] rounded-xl p-7 shadow-2xl space-y-5">
+          <div className="text-center space-y-1">
+            <p className="text-xs uppercase tracking-[0.25em] text-[#b8976f]">
+              Victorian Commonplace
+            </p>
+            <h1 className="text-2xl font-bold italic text-[#f4ebd0]">
+              {isSignUp ? 'Open Your Ledger' : 'Enter Your Study'}
+            </h1>
           </div>
 
-          {authError && <div className="bg-red-950/60 border border-red-800 text-red-300 text-xs p-3 rounded">{authError}</div>}
+          {authError && (
+            <div className="p-3 rounded bg-red-950/60 border border-red-500/40 text-red-200 text-xs">
+              {authError}
+            </div>
+          )}
 
           <form onSubmit={handleAuth} className="space-y-4">
             <div>
-              <label className="block text-[11px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">Email Address</label>
+              <label className="block text-xs uppercase tracking-wider text-[#b8976f] mb-1">
+                Email
+              </label>
               <input
                 type="email"
+                required
                 value={authEmail}
                 onChange={(e) => setAuthEmail(e.target.value)}
-                className="w-full bg-[#140d08] border border-[#3d2817] rounded-lg px-4 py-2.5 text-xs text-[#f4ebd0] focus:outline-none focus:border-[#70492c]"
-                required
+                className="w-full px-3.5 py-2 rounded bg-[#140d08] border border-[#3d2817] text-[#f4ebd0] focus:outline-none focus:border-[#c9a26d]"
+                placeholder="scholar@example.com"
               />
             </div>
+
             <div>
-              <label className="block text-[11px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">Password</label>
+              <label className="block text-xs uppercase tracking-wider text-[#b8976f] mb-1">
+                Password
+              </label>
               <input
                 type="password"
+                required
                 value={authPassword}
                 onChange={(e) => setAuthPassword(e.target.value)}
-                className="w-full bg-[#140d08] border border-[#3d2817] rounded-lg px-4 py-2.5 text-xs text-[#f4ebd0] focus:outline-none focus:border-[#70492c]"
-                required
+                className="w-full px-3.5 py-2 rounded bg-[#140d08] border border-[#3d2817] text-[#f4ebd0] focus:outline-none focus:border-[#c9a26d]"
+                placeholder="••••••••"
               />
             </div>
+
             <button
               type="submit"
-              className="w-full bg-[#3d2817] hover:bg-[#4d3420] text-[#f4ebd0] border border-[#70492c] py-2.5 rounded-lg text-xs font-semibold transition shadow"
+              className="w-full py-2.5 rounded bg-[#70492c] hover:bg-[#875836] text-[#f4ebd0] font-semibold transition"
             >
-              {isSignUp ? 'Register Account' : 'Sign In'}
+              {isSignUp ? 'Create Account' : 'Sign In'}
             </button>
           </form>
 
-          <div className="relative flex py-2 items-center">
-            <div className="flex-grow border-t border-[#3d2817]"></div>
-            <span className="flex-shrink mx-4 text-[10px] text-[#8c6b48] uppercase tracking-wider">or</span>
-            <div className="flex-grow border-t border-[#3d2817]"></div>
-          </div>
-
           <button
+            type="button"
             onClick={handleGoogleLogin}
-            className="w-full bg-[#140d08] hover:bg-[#261910] text-[#d4c3a3] border border-[#3d2817] py-2.5 rounded-lg text-xs font-semibold transition flex items-center justify-center space-x-2"
+            className="w-full py-2 rounded bg-[#140d08] hover:bg-[#291b11] border border-[#3d2817] text-xs uppercase tracking-wider text-[#dfcaab] transition"
           >
-            <span>Continue with Google</span>
+            Continue with Google
           </button>
 
-          <div className="text-center">
+          <div className="text-center pt-1">
             <button
-              onClick={() => setIsSignUp(!isSignUp)}
+              type="button"
+              onClick={() => {
+                setIsSignUp((prev) => !prev);
+                setAuthError('');
+              }}
               className="text-xs text-[#b8976f] hover:text-[#f4ebd0] underline"
             >
-              {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Register"}
+              {isSignUp
+                ? 'Already have an account? Sign in'
+                : 'Need an account? Sign up'}
             </button>
           </div>
         </div>
@@ -692,565 +1376,938 @@ export default function App() {
     );
   }
 
-  const activeIgTheme = IG_THEMES[igTheme] || IG_THEMES.mahogany;
+  const quickTags = QUICK_TAGS_BY_SECTION[activeTab] || [];
+  const formattedTodayLabel = new Date().toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+  });
 
   return (
     <div
-      onPaste={handlePasteImage}
-      className="min-h-screen bg-[#14100c] text-[#d4c3a3] flex flex-col md:flex-row font-serif selection:bg-[#5c3a21] selection:text-[#f4ebd0]"
+      onPaste={handlePaste}
+      className="min-h-screen bg-[#140d08] text-[#f4ebd0] font-serif flex flex-col md:flex-row"
     >
-      
-      {/* Mobile Header Bar */}
-      <div className="md:hidden bg-[#1f150e] border-b-2 border-[#3d2817] p-4 flex items-center justify-between sticky top-0 z-30">
-        <div className="flex items-center space-x-2">
-          <Feather className="w-5 h-5 text-[#dfcaab]" />
-          <span className="font-bold text-sm text-[#f4ebd0]">COMMONPLACE</span>
+      {/* Mobile Header */}
+      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-[#1f150e] border-b border-[#3d2817] sticky top-0 z-30">
+        <div className="flex items-center gap-2">
+          <Feather className="w-5 h-5 text-[#c9a26d]" />
+          <span className="font-bold tracking-widest uppercase text-sm text-[#f4ebd0]">
+            COMMONPLACE
+          </span>
         </div>
-        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="text-[#d4c3a3] p-1">
-          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
+          className="p-2 rounded bg-[#140d08] border border-[#3d2817] text-[#dfcaab]"
+          aria-label="Toggle navigation"
+        >
+          {mobileMenuOpen ? (
+            <X className="w-5 h-5" />
+          ) : (
+            <Menu className="w-5 h-5" />
+          )}
         </button>
-      </div>
+      </header>
 
-      {/* Leather Sidebar (Responsive) */}
-      <aside className={`fixed md:sticky top-0 h-screen w-72 bg-[#1b120c] border-r-2 border-[#3d2817] flex flex-col z-20 transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-        <div className="p-6 hidden md:flex items-center space-x-3 border-b-2 border-[#3d2817] bg-[#140d08]">
-          <div className="w-10 h-10 rounded-lg bg-[#3d2817] border border-[#70492c] flex items-center justify-center text-[#dfcaab]">
-            <Feather className="w-5 h-5" />
-          </div>
+      {/* Sidebar / Mobile Drawer */}
+      <aside
+        className={`${
+          mobileMenuOpen ? 'block' : 'hidden'
+        } md:block w-full md:w-64 shrink-0 bg-[#1f150e] border-b md:border-b-0 md:border-r border-[#3d2817] p-4 space-y-5`}
+      >
+        <div className="hidden md:flex items-center gap-2.5 px-2 pt-1">
+          <Feather className="w-5 h-5 text-[#c9a26d]" />
           <div>
-            <span className="font-bold text-base tracking-wider text-[#f4ebd0]">COMMONPLACE</span>
-            <span className="block text-[10px] text-[#b8976f] font-semibold tracking-widest uppercase">Cloud Journal</span>
+            <h1 className="font-bold tracking-widest uppercase text-sm text-[#f4ebd0]">
+              COMMONPLACE
+            </h1>
+            <p className="text-[11px] italic text-[#b8976f]">
+              Cabinet of Curiosities
+            </p>
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto mt-14 md:mt-0">
+        <nav className="space-y-1">
           <button
-            onClick={() => { setActiveTab('dashboard'); setSearchQuery(''); setSelectedTagFilter('ALL'); setMobileMenuOpen(false); }}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all font-medium text-sm border ${
-              activeTab === 'dashboard' 
-                ? 'bg-[#3d2817] text-[#f4ebd0] border-[#70492c] shadow-md' 
-                : 'border-transparent text-[#b8976f] hover:bg-[#261910] hover:text-[#d4c3a3]'
+            type="button"
+            onClick={() => {
+              setActiveTab('dashboard');
+              setSelectedTagFilter('ALL');
+              setBookClubOnly(false);
+              setPinnedOnly(false);
+              setMobileMenuOpen(false);
+            }}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition ${
+              activeTab === 'dashboard'
+                ? 'bg-[#70492c] text-[#f4ebd0] font-semibold'
+                : 'text-[#cbb292] hover:bg-[#291b11]'
             }`}
           >
-            <LayoutDashboard className="w-4 h-4 text-[#b8976f]" />
-            <span>Dashboard</span>
+            <LayoutDashboard className="w-4 h-4" />
+            <span>Almanac Overview</span>
           </button>
 
-          <div className="pt-4 pb-2 px-4 flex items-center justify-between text-[11px] font-bold text-[#8c6b48] uppercase tracking-widest border-t border-[#261910] mt-4">
-            <span>Log Sections</span>
-            <button 
-              onClick={() => setIsSectionModalOpen(true)}
-              className="text-[#b8976f] hover:text-[#f4ebd0] transition"
-              title="Add section"
-            >
-              <FolderPlus className="w-4 h-4" />
-            </button>
-          </div>
-
-          {sections.map(sec => {
-            const IconComponent = ICON_MAP[sec.icon] || BookOpen;
+          {sections.map((sec) => {
+            const IconComponent = ICON_MAP[sec.icon] || Feather;
             const count = (entries[sec.id] || []).length;
-            const isActive = activeTab === sec.id;
+            const isCustom = !DEFAULT_SECTION_IDS.has(sec.id);
+
             return (
-              <button
+              <div
                 key={sec.id}
-                onClick={() => { setActiveTab(sec.id); setSelectedSection(sec.id); setSearchQuery(''); setSelectedTagFilter('ALL'); setMobileMenuOpen(false); }}
-                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all font-medium text-sm border group ${
-                  isActive 
-                    ? 'bg-[#3d2817] text-[#f4ebd0] border-[#70492c] shadow-md' 
-                    : 'border-transparent text-[#b8976f] hover:bg-[#261910] hover:text-[#d4c3a3]'
+                className={`group flex items-center justify-between rounded-lg transition ${
+                  activeTab === sec.id
+                    ? 'bg-[#70492c] text-[#f4ebd0] font-semibold'
+                    : 'text-[#cbb292] hover:bg-[#291b11]'
                 }`}
               >
-                <IconComponent className={`w-4 h-4 ${isActive ? 'text-[#f4ebd0]' : 'text-[#8c6b48] group-hover:text-[#b8976f]'}`} />
-                <span className="truncate capitalize">{sec.name}</span>
-                <span className={`ml-auto text-xs px-2 py-0.5 rounded font-semibold ${isActive ? 'bg-[#261910] text-[#f4ebd0]' : 'bg-[#1b120c] text-[#8c6b48]'}`}>
-                  {count}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(sec.id);
+                    setSelectedSection(sec.id);
+                    setSelectedTagFilter('ALL');
+                    setBookClubOnly(false);
+                    setPinnedOnly(false);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="flex-1 flex items-center justify-between px-3 py-2 text-sm text-left min-w-0"
+                >
+                  <span className="flex items-center gap-2.5 truncate">
+                    <IconComponent className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{sec.name}</span>
+                  </span>
+                  <span className="text-xs text-[#b8976f] ml-2">{count}</span>
+                </button>
+
+                {isCustom && (
+                  <button
+                    type="button"
+                    disabled={deletingSectionId === sec.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteSection(sec);
+                    }}
+                    className="mr-2 p-1.5 rounded text-[#b8976f] hover:text-red-300 hover:bg-[#140d08]/60 disabled:opacity-40 transition shrink-0"
+                    title={`Delete ${sec.name} volume`}
+                    aria-label={`Delete ${sec.name} volume`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t-2 border-[#3d2817] bg-[#140d08] space-y-2">
-          <button
-            onClick={() => setIsSectionModalOpen(true)}
-            className="w-full bg-[#261910] hover:bg-[#3d2817] border border-[#523720] text-[#d4c3a3] rounded-lg py-2 px-3 text-xs font-semibold flex items-center justify-center space-x-2 transition shadow-inner"
-          >
-            <Plus className="w-3.5 h-3.5 text-[#b8976f]" />
-            <span>New Log Section</span>
-          </button>
-          {supabase && (
+        <button
+          type="button"
+          onClick={() => {
+            setIsSectionModalOpen(true);
+            setMobileMenuOpen(false);
+          }}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[#70492c] text-xs uppercase tracking-wider text-[#dfcaab] hover:bg-[#291b11] transition"
+        >
+          <FolderPlus className="w-4 h-4" />
+          <span>New Volume</span>
+        </button>
+
+        {/* Archive Export Controls */}
+        <div className="pt-3 border-t border-[#3d2817] space-y-2">
+          <span className="block px-1 text-[11px] uppercase tracking-widest text-[#9c7d56]">
+            Backup Ledger
+          </span>
+          <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={handleLogout}
-              className="w-full bg-[#140d08] hover:bg-red-950/40 border border-[#3d2817] text-[#b8976f] rounded-lg py-2 px-3 text-xs font-semibold flex items-center justify-center space-x-2 transition"
+              type="button"
+              onClick={handleExportJson}
+              className="px-2.5 py-2 rounded-lg bg-[#140d08] hover:bg-[#291b11] border border-[#3d2817] text-xs text-[#dfcaab] flex items-center justify-center gap-1.5 transition"
+              title="Download full JSON backup"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
+              <FileJson className="w-3.5 h-3.5 text-[#c9a26d]" />
+              <span>JSON</span>
             </button>
-          )}
+            <button
+              type="button"
+              onClick={handleExportMarkdown}
+              className="px-2.5 py-2 rounded-lg bg-[#140d08] hover:bg-[#291b11] border border-[#3d2817] text-xs text-[#dfcaab] flex items-center justify-center gap-1.5 transition"
+              title="Download Markdown archive"
+            >
+              <FileCode2 className="w-3.5 h-3.5 text-[#c9a26d]" />
+              <span>Markdown</span>
+            </button>
+          </div>
         </div>
+
+        {session && (
+          <div className="pt-3 border-t border-[#3d2817] flex items-center justify-between px-2 text-xs text-[#b8976f]">
+            <span className="truncate max-w-[155px]">{session.user.email}</span>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="p-1.5 rounded hover:bg-[#291b11] text-[#dfcaab]"
+              title="Sign out"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-screen overflow-y-auto bg-[#14100c]">
-        <header className="h-20 border-b-2 border-[#3d2817] px-6 md:px-10 flex items-center justify-between bg-[#1f150e] sticky top-0 z-10 shadow-md">
-          <h1 className="text-lg md:text-xl font-bold tracking-wide text-[#f4ebd0] capitalize italic">
-            {activeTab === 'dashboard' ? 'Cabinet of Curiosities' : `${activeTab} Chronicle`}
-          </h1>
-
-          {activeTab === 'dashboard' ? (
-            <button
-              onClick={refreshDashboard}
-              className="flex items-center space-x-2 bg-[#3d2817] hover:bg-[#4d3420] border border-[#70492c] text-[#f4ebd0] px-3.5 py-2 rounded-lg text-xs font-semibold transition shadow"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-[#b8976f]" />
-              <span>Shuffle Pages</span>
-            </button>
-          ) : (
-            <div className="flex items-center space-x-3">
-              <div className="relative">
-                <Search className="w-4 h-4 text-[#8c6b48] absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search..."
-                  className="bg-[#140d08] border border-[#3d2817] rounded-lg pl-9 pr-4 py-2 text-xs text-[#d4c3a3] placeholder-[#8c6b48] focus:outline-none focus:border-[#70492c] w-40 sm:w-64 transition shadow-inner"
-                />
-              </div>
-            </div>
-          )}
-        </header>
-
-        <div className="p-4 sm:p-10 max-w-5xl w-full mx-auto flex-1">
-          {activeTab === 'dashboard' ? (
-            <div className="space-y-8">
-              <div className="rounded-xl bg-[#211710] border-2 border-[#3d2817] p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-                <h2 className="text-lg sm:text-xl font-bold text-[#f4ebd0] mb-2 tracking-wide italic">An Almanac of Reflections</h2>
-                <p className="text-[#b8976f] text-xs sm:text-sm max-w-2xl leading-relaxed">
-                  Your daily compendium surfaces a solitary memory or process from each register, uniting disparate studies into one harmonious view.
+      {/* Main Content */}
+      <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-5xl mx-auto w-full space-y-6">
+        {activeTab === 'dashboard' ? (
+          <section className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#3d2817] pb-4">
+              <div>
+                <h2 className="text-2xl font-bold italic text-[#f4ebd0]">
+                  Almanac Overview
+                </h2>
+                <p className="text-xs text-[#b8976f]">
+                  Pinned marginalia, On This Day records & volume highlights
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {sections.map(sec => {
-                  const item = randomHighlights[sec.id];
-                  const IconComponent = ICON_MAP[sec.icon] || BookOpen;
-                  return (
-                    <div key={sec.id} className="bg-[#1f150e] border-2 border-[#3d2817] rounded-xl p-6 sm:p-7 flex flex-col justify-between transition hover:border-[#523720] shadow-xl relative">
-                      <div className="absolute top-3 right-4 text-[10px] text-[#70492c] font-mono">EST. 1890</div>
-                      <div>
-                        <div className="flex items-center justify-between text-[#b8976f] mb-4">
-                          <div className="flex items-center space-x-2.5">
-                            <div className="w-8 h-8 rounded bg-[#140d08] border border-[#3d2817] flex items-center justify-center">
-                              <IconComponent className="w-4 h-4 text-[#dfcaab]" />
-                            </div>
-                            <span className="font-semibold text-xs tracking-wider uppercase text-[#d4c3a3]">{sec.name}</span>
-                          </div>
-                          {item?.imageUrl && (
-                            <button
-                              type="button"
-                              onClick={() => setViewingImage({ src: item.imageUrl, title: item.title })}
-                              className="text-[#b8976f] hover:text-[#f4ebd0] p-1.5 rounded transition bg-[#140d08] border border-[#3d2817]"
-                              title="Maximize image"
-                              aria-label="Maximize image"
-                            >
-                              <Maximize2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                        {item ? (
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <h3 className="text-base font-bold text-[#f4ebd0] italic">{item.title}</h3>
-                              <span className="text-[11px] text-[#8c6b48]">{item.date}</span>
-                            </div>
-                            <p className="text-[#c5b395] text-sm leading-relaxed whitespace-pre-wrap">{item.content}</p>
-                            {item.imageUrl && (
-                              <div className="mt-3 pt-2.5 border-t border-[#3d2817]/60 flex items-center justify-between gap-3">
-                                <img
-                                  src={item.imageUrl}
-                                  alt={item.title || 'Entry screenshot'}
-                                  onClick={() => setViewingImage({ src: item.imageUrl, title: item.title })}
-                                  className="max-h-36 w-auto object-contain rounded-lg border border-[#3d2817] bg-[#140d08] cursor-zoom-in"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => setViewingImage({ src: item.imageUrl, title: item.title })}
-                                  className="text-[#b8976f] hover:text-[#f4ebd0] p-2 rounded transition bg-[#140d08] border border-[#3d2817] shrink-0"
-                                  title="Maximize image"
-                                  aria-label="Maximize image"
-                                >
-                                  <Maximize2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            )}
-                            {item.tags && item.tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1.5 pt-2">
-                                {item.tags.map(t => (
-                                  <button
-                                    key={t}
-                                    type="button"
-                                    onClick={() => jumpToSectionWithTag(sec.id, t)}
-                                    className="text-[10px] font-medium bg-[#140d08] text-[#b8976f] hover:text-[#f4ebd0] border border-[#3d2817] px-2 py-0.5 rounded transition"
-                                  >
-                                    #{t}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="py-8 text-center text-[#8c6b48] italic text-xs">
-                            No entries recorded in {sec.name} yet.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportJson}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1f150e] hover:bg-[#291b11] border border-[#3d2817] text-xs uppercase tracking-wider text-[#dfcaab]"
+                >
+                  <FileJson className="w-3.5 h-3.5 text-[#c9a26d]" />
+                  <span>Export JSON</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportMarkdown}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#1f150e] hover:bg-[#291b11] border border-[#3d2817] text-xs uppercase tracking-wider text-[#dfcaab]"
+                >
+                  <FileCode2 className="w-3.5 h-3.5 text-[#c9a26d]" />
+                  <span>Export MD</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = {};
+                    Object.entries(entries).forEach(([secId, list]) => {
+                      if (list?.length) {
+                        next[secId] =
+                          list[Math.floor(Math.random() * list.length)];
+                      }
+                    });
+                    setRandomHighlights(next);
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#1f150e] hover:bg-[#291b11] border border-[#3d2817] text-xs uppercase tracking-wider text-[#dfcaab]"
+                >
+                  <Sparkles className="w-4 h-4 text-[#c9a26d]" />
+                  <span>Shuffle Highlights</span>
+                </button>
               </div>
             </div>
-          ) : (
-            <div className="space-y-8">
-              {/* Form Entry */}
-              <div className="bg-[#1f150e] border-2 border-[#3d2817] rounded-xl p-6 sm:p-7 shadow-2xl relative">
-                <h2 className="text-sm font-bold text-[#f4ebd0] mb-4 flex items-center space-x-2 uppercase tracking-wider">
-                  <Feather className="w-4 h-4 text-[#b8976f]" />
-                  <span>{editingEntryId ? 'Edit Journal Entry' : `Record Entry into ${activeTab}`}</span>
-                </h2>
-                <form onSubmit={handleSaveEntry} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="md:col-span-2">
-                      <label className="block text-[11px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">Subject / Title</label>
-                      <input
-                        type="text"
-                        value={newTitle}
-                        onChange={(e) => setNewTitle(e.target.value)}
-                        placeholder={
-                          activeTab === 'work'
-                            ? 'e.g., Sprint notes, client brief, or daily log'
-                            : 'e.g., Treatise on Habits or Ledger Page'
-                        }
-                        className="w-full bg-[#140d08] border border-[#3d2817] rounded-lg px-4 py-2.5 text-xs text-[#f4ebd0] placeholder-[#70492c] focus:outline-none focus:border-[#70492c]"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">Tags</label>
-                      <input
-                        type="text"
-                        value={newTags}
-                        onChange={(e) => setNewTags(e.target.value)}
-                        placeholder={
-                          activeTab === 'books'
-                            ? 'book-club, running-channel, work, life'
-                            : activeTab === 'health'
-                              ? 'running-channel, life'
-                              : 'e.g. doctrine, study, notes'
-                        }
-                        className="w-full bg-[#140d08] border border-[#3d2817] rounded-lg px-4 py-2.5 text-xs text-[#f4ebd0] placeholder-[#70492c] focus:outline-none focus:border-[#70492c]"
-                      />
-                    </div>
-                  </div>
 
-                  {presetTagsForActiveHead.length > 0 && (
-                    <div className="space-y-1.5">
-                      <span className="block text-[10px] font-semibold text-[#8c6b48] uppercase tracking-wider">
-                        Quick Tags for {activeTab}
-                      </span>
-                      <div className="flex flex-wrap gap-2">
-                        {presetTagsForActiveHead.map(tag => {
-                          const isSelected = activeTagList.includes(tag);
-                          return (
-                            <button
-                              key={tag}
-                              type="button"
-                              onClick={() => togglePresetTag(tag)}
-                              className={`text-xs px-3 py-1 rounded-lg font-medium transition border ${
-                                isSelected
-                                  ? 'bg-[#3d2817] text-[#f4ebd0] border-[#8c6b48] shadow'
-                                  : 'bg-[#140d08] text-[#b8976f] border-[#3d2817] hover:bg-[#261910]'
-                              }`}
-                            >
-                              #{tag}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+            {/* Pinned Marginalia & On This Day Strip */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-[#1f150e] border border-[#70492c]/80 rounded-xl p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-widest text-[#e3be82] font-semibold flex items-center gap-1.5">
+                    <Pin className="w-3.5 h-3.5" />
+                    <span>Pinned Marginalia ({pinnedEntries.length})</span>
+                  </span>
+                  {pinnedEntries.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab(pinnedEntries[0]._sectionId);
+                        setSearchAllVolumes(true);
+                        setPinnedOnly(true);
+                      }}
+                      className="text-xs text-[#dfcaab] hover:underline"
+                    >
+                      View All Pinned
+                    </button>
                   )}
-
-                  <div>
-                    <label className="block text-[11px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">
-                      {activeTab === 'work' ? 'Entry Notes' : 'Transcription / Highlight'}
-                    </label>
-                    <textarea
-                      value={newContent}
-                      onChange={(e) => setNewContent(e.target.value)}
-                      placeholder={
-                        activeTab === 'work'
-                          ? 'Write your normal work entry here (you can also paste a screenshot with Ctrl+V)...'
-                          : 'Inscribe your thoughts or procedures (you can also paste a screenshot with Ctrl+V)...'
-                      }
-                      rows="3"
-                      className="w-full bg-[#140d08] border border-[#3d2817] rounded-lg px-4 py-2.5 text-xs text-[#f4ebd0] placeholder-[#70492c] focus:outline-none focus:border-[#70492c] resize-none"
-                      required
-                    />
-                  </div>
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <label className="flex items-center space-x-2 text-xs text-[#b8976f] cursor-pointer bg-[#140d08] border border-[#3d2817] px-3 py-2 rounded-lg hover:border-[#70492c] transition">
-                        <ImageIcon className="w-4 h-4 text-[#b8976f]" />
-                        <span className="truncate max-w-[200px]">{imageFile ? imageFile.name : 'Attach or Paste Screenshot'}</span>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => attachImageFile(e.target.files[0] || null)}
-                          className="hidden"
-                        />
-                      </label>
-                      {imageFile && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setImageFile(null);
-                            setImagePreviewUrl('');
-                            if (fileInputRef.current) fileInputRef.current.value = '';
-                          }}
-                          className="text-xs text-[#8c6b48] hover:text-[#f4ebd0] px-2 py-1"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="flex space-x-2 w-full sm:w-auto">
-                      {editingEntryId && (
-                        <button
-                          type="button"
-                          onClick={resetEntryForm}
-                          className="px-4 py-2 rounded-lg text-xs font-medium bg-[#140d08] border border-[#3d2817] text-[#8c6b48]"
-                        >
-                          Cancel
-                        </button>
-                      )}
-                      <button
-                        type="submit"
-                        className="flex-1 sm:flex-none bg-[#3d2817] hover:bg-[#4d3420] text-[#f4ebd0] border border-[#70492c] font-medium text-xs px-6 py-2.5 rounded-lg transition shadow"
-                      >
-                        {editingEntryId ? 'Update Entry' : 'Inscribe Entry'}
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-
-              {/* Book Club Spotlight & Instagram Card Generator inside Books */}
-              {activeTab === 'books' && (
-                <div className="bg-[#211710] border-2 border-[#523720] rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                      <span className="text-xs font-bold uppercase tracking-wider text-[#f4ebd0]">
-                        Book Club Queue (#book-club)
-                      </span>
-                      <span className="text-[11px] bg-[#140d08] text-[#dfcaab] border border-[#3d2817] px-2 py-0.5 rounded">
-                        {bookClubEntries.length} tagged · {selectedBookClubIds.length} queued
-                      </span>
-                    </div>
-                    <p className="text-xs text-[#b8976f]">
-                      Sort by #book-club, queue entries, and generate a downloadable Instagram-ready PNG image.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedTagFilter(selectedTagFilter === 'book-club' ? 'ALL' : 'book-club')}
-                      className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-semibold border transition ${
-                        selectedTagFilter === 'book-club'
-                          ? 'bg-[#5c3a21] text-[#f4ebd0] border-[#8c6b48]'
-                          : 'bg-[#140d08] text-[#d4c3a3] border-[#3d2817] hover:bg-[#261910]'
-                      }`}
-                    >
-                      {selectedTagFilter === 'book-club' ? 'Showing #book-club' : 'Sort #book-club'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={bookClubEntries.length === 0}
-                      onClick={() => setIsIgStudioOpen(true)}
-                      className="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-semibold border bg-[#3d2817] hover:bg-[#4d3420] disabled:opacity-40 disabled:cursor-not-allowed text-[#f4ebd0] border-[#70492c] flex items-center justify-center space-x-1.5 transition"
-                    >
-                      <Camera className="w-3.5 h-3.5 text-[#dfcaab]" />
-                      <span>IG Image Card</span>
-                    </button>
-                  </div>
                 </div>
-              )}
 
-              {/* Tag Filter & Sort Controls */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2">
-                {availableSectionTags.length > 0 ? (
-                  <div className="flex items-center space-x-2 overflow-x-auto pb-1">
-                    <span className="text-xs font-medium text-[#8c6b48] flex items-center space-x-1 shrink-0">
-                      <Tag className="w-3.5 h-3.5" />
-                      <span>Filter:</span>
-                    </span>
-                    <button
-                      onClick={() => setSelectedTagFilter('ALL')}
-                      className={`text-xs px-3 py-1 rounded font-medium transition shrink-0 border ${
-                        selectedTagFilter === 'ALL' ? 'bg-[#3d2817] text-[#f4ebd0] border-[#70492c]' : 'bg-[#1b120c] border-[#3d2817] text-[#b8976f]'
-                      }`}
-                    >
-                      All
-                    </button>
-                    {availableSectionTags.map(tag => (
-                      <button
-                        key={tag}
-                        onClick={() => setSelectedTagFilter(tag)}
-                        className={`text-xs px-3 py-1 rounded font-medium transition shrink-0 border ${
-                          selectedTagFilter === tag ? 'bg-[#3d2817] text-[#f4ebd0] border-[#70492c]' : 'bg-[#1b120c] border-[#3d2817] text-[#b8976f]'
-                        }`}
+                {pinnedEntries.length === 0 ? (
+                  <p className="text-sm italic text-[#8a6d4b]">
+                    Pin any entry inside a volume to keep your favorite quotes
+                    and reflections right here.
+                  </p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {pinnedEntries.slice(0, 3).map((pinItem) => (
+                      <div
+                        key={`pin-${pinItem._sectionId}-${pinItem.id}`}
+                        className="p-3 rounded-lg bg-[#140d08] border border-[#3d2817] space-y-1"
                       >
-                        #{tag}
-                      </button>
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab(pinItem._sectionId);
+                              setSelectedSection(pinItem._sectionId);
+                            }}
+                            className="text-sm font-bold italic text-[#f4ebd0] hover:underline text-left truncate"
+                          >
+                            {pinItem.title || 'Untitled Note'}
+                          </button>
+                          <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded bg-[#2e1d12] text-[#e3be82] shrink-0">
+                            {pinItem._sectionLabel}
+                          </span>
+                        </div>
+                        {pinItem.content && (
+                          <p className="text-xs text-[#cbb292] line-clamp-2">
+                            {pinItem.content}
+                          </p>
+                        )}
+                      </div>
                     ))}
                   </div>
-                ) : (
-                  <div />
                 )}
-
-                <div className="flex items-center space-x-2 shrink-0">
-                  <ArrowUpDown className="w-3.5 h-3.5 text-[#8c6b48]" />
-                  <select
-                    value={sortOrder}
-                    onChange={(e) => setSortOrder(e.target.value)}
-                    className="bg-[#1b120c] border border-[#3d2817] rounded-lg px-3 py-1.5 text-xs text-[#d4c3a3] focus:outline-none focus:border-[#70492c]"
-                  >
-                    <option value="newest">Newest First</option>
-                    <option value="oldest">Oldest First</option>
-                    <option value="title">Title (A–Z)</option>
-                  </select>
-                </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-[#3d2817] pb-2">
-                  <h2 className="text-xs font-bold text-[#b8976f] uppercase tracking-widest">Logged Entries ({filteredEntries.length})</h2>
+              <div className="bg-[#1f150e] border border-[#70492c]/80 rounded-xl p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-widest text-[#e3be82] font-semibold flex items-center gap-1.5">
+                    <CalendarHeart className="w-3.5 h-3.5" />
+                    <span>On This Day • {formattedTodayLabel}</span>
+                  </span>
+                  <span className="text-xs text-[#9c7d56]">
+                    {onThisDayEntries.length}{' '}
+                    {onThisDayEntries.length === 1 ? 'record' : 'records'}
+                  </span>
                 </div>
 
-                {filteredEntries.length === 0 ? (
-                  <div className="text-center py-16 border border-dashed border-[#3d2817] rounded-xl text-[#8c6b48] bg-[#1f150e]/50">
-                    <p className="text-xs italic">No entries found within this volume.</p>
-                  </div>
+                {onThisDayEntries.length === 0 ? (
+                  <p className="text-sm italic text-[#8a6d4b]">
+                    No past entries inscribed on {formattedTodayLabel} yet—today’s
+                    entries will appear here on future {formattedTodayLabel}{' '}
+                    dates.
+                  </p>
                 ) : (
-                  filteredEntries.map(item => {
-                    const isBookClubItem = activeTab === 'books' && item.tags && item.tags.includes('book-club');
-                    const isSelectedForPost = selectedBookClubIds.includes(item.id);
-                    return (
+                  <div className="space-y-2.5">
+                    {onThisDayEntries.slice(0, 3).map((otdItem) => (
                       <div
-                        key={item.id}
-                        className={`bg-[#1f150e] border-2 rounded-xl p-6 flex flex-col sm:flex-row justify-between items-start gap-4 shadow-xl transition ${
-                          isSelectedForPost ? 'border-[#8c6b48]' : 'border-[#3d2817]'
-                        }`}
+                        key={`otd-${otdItem._sectionId}-${otdItem.id}`}
+                        className="p-3 rounded-lg bg-[#140d08] border border-[#3d2817] space-y-1"
                       >
-                        <div className="space-y-2 max-w-3xl flex-1 w-full">
-                          <div className="flex items-center space-x-3 flex-wrap gap-y-1">
-                            <h3 className="text-base font-bold text-[#f4ebd0] italic">{item.title}</h3>
-                            <span className="text-[11px] text-[#8c6b48] bg-[#140d08] px-2 py-0.5 rounded border border-[#3d2817]">{item.date}</span>
-                            {isBookClubItem && (
-                              <button
-                                type="button"
-                                onClick={() => toggleBookClubSelection(item.id)}
-                                className={`text-[11px] px-2.5 py-0.5 rounded border flex items-center space-x-1 transition ${
-                                  isSelectedForPost
-                                    ? 'bg-[#5c3a21] text-[#f4ebd0] border-[#8c6b48]'
-                                    : 'bg-[#140d08] text-[#b8976f] border-[#3d2817] hover:border-[#70492c]'
-                                }`}
-                              >
-                                <CheckCircle2 className="w-3 h-3" />
-                                <span>{isSelectedForPost ? 'Queued for IG' : 'Queue for IG'}</span>
-                              </button>
-                            )}
-                          </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveTab(otdItem._sectionId);
+                              setSelectedSection(otdItem._sectionId);
+                            }}
+                            className="text-sm font-bold italic text-[#f4ebd0] hover:underline text-left truncate"
+                          >
+                            {otdItem.title || 'Untitled Note'}
+                          </button>
+                          <span className="text-[11px] text-[#b8976f] shrink-0">
+                            {otdItem.date}
+                          </span>
+                        </div>
+                        {otdItem.content && (
+                          <p className="text-xs text-[#cbb292] line-clamp-2">
+                            {otdItem.content}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
 
-                          <p className="text-[#c5b395] text-xs sm:text-sm whitespace-pre-wrap leading-relaxed pt-1">{item.content}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {sections.map((sec) => {
+                const highlight = randomHighlights[sec.id];
+                const totalCount = (entries[sec.id] || []).length;
+                return (
+                  <div
+                    key={sec.id}
+                    className="bg-[#1f150e] border border-[#3d2817] rounded-xl p-5 flex flex-col justify-between space-y-4"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab(sec.id)}
+                          className="text-xs uppercase tracking-widest text-[#c9a26d] hover:underline font-semibold"
+                        >
+                          {sec.name} ({totalCount})
+                        </button>
+                        {highlight?.date && (
+                          <span className="text-xs text-[#9c7d56]">
+                            {highlight.date}
+                          </span>
+                        )}
+                      </div>
 
-                          {/* Minimized image below message text; expands to full view on Maximize */}
-                          {item.imageUrl && (
-                            <div className="mt-3 pt-2.5 border-t border-[#3d2817]/60 flex items-center justify-between gap-3">
+                      {highlight ? (
+                        <>
+                          <h3 className="text-lg font-bold italic text-[#f4ebd0]">
+                            {highlight.title}
+                          </h3>
+                          <FormattedEntryBody content={highlight.content} />
+                          {highlight.imageUrl && (
+                            <div className="pt-2 flex items-center justify-between gap-2">
                               <img
-                                src={item.imageUrl}
-                                alt={item.title || 'Entry screenshot'}
-                                onClick={() => setViewingImage({ src: item.imageUrl, title: item.title })}
-                                className="max-h-40 w-auto object-contain rounded-lg border border-[#3d2817] bg-[#140d08] cursor-zoom-in"
+                                src={highlight.imageUrl}
+                                alt={highlight.title || 'Highlight'}
+                                onClick={() =>
+                                  setViewingImage({
+                                    src: highlight.imageUrl,
+                                    title: highlight.title,
+                                  })
+                                }
+                                className="max-h-28 w-auto object-contain rounded border border-[#3d2817] bg-[#140d08] cursor-zoom-in"
                               />
                               <button
                                 type="button"
-                                onClick={() => setViewingImage({ src: item.imageUrl, title: item.title })}
-                                className="text-[#b8976f] hover:text-[#f4ebd0] p-2 rounded transition bg-[#140d08] border border-[#3d2817] shrink-0"
-                                title="Maximize image"
-                                aria-label="Maximize image"
+                                onClick={() =>
+                                  setViewingImage({
+                                    src: highlight.imageUrl,
+                                    title: highlight.title,
+                                  })
+                                }
+                                className="p-2 rounded bg-[#140d08] border border-[#3d2817] text-[#b8976f] hover:text-[#f4ebd0]"
+                                title="View full image"
                               >
                                 <Maximize2 className="w-4 h-4" />
                               </button>
                             </div>
                           )}
+                        </>
+                      ) : (
+                        <p className="text-sm italic text-[#8a6d4b]">
+                          No entries inscribed in {sec.name} yet.
+                        </p>
+                      )}
+                    </div>
 
-                          {item.tags && item.tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 pt-2">
-                              {item.tags.map(t => (
-                                <button
-                                  key={t}
-                                  type="button"
-                                  onClick={() => setSelectedTagFilter(t)}
-                                  className="text-[10px] font-medium bg-[#140d08] text-[#b8976f] hover:text-[#f4ebd0] border border-[#3d2817] px-2 py-0.5 rounded transition"
-                                >
-                                  #{t}
-                                </button>
-                              ))}
-                            </div>
-                          )}
+                    <div className="pt-2 border-t border-[#3d2817]/60 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedSection(sec.id);
+                          setActiveTab(sec.id);
+                        }}
+                        className="text-xs text-[#dfcaab] hover:text-[#f4ebd0] flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Open {sec.name}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : (
+          <section className="space-y-6">
+            {/* Section Header & Book Club Tools */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#3d2817] pb-4">
+              <div>
+                <h2 className="text-2xl font-bold italic text-[#f4ebd0]">
+                  {activeSectionObj?.name || activeTab}
+                </h2>
+                <p className="text-xs text-[#b8976f]">
+                  {filteredEntries.length} of {currentSectionEntries.length}{' '}
+                  entries shown • Paste screenshots with Ctrl/Cmd + V
+                </p>
+              </div>
+
+              {activeTab === 'books' && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBookClubOnly((prev) => !prev)}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition ${
+                      bookClubOnly
+                        ? 'bg-[#70492c] text-[#f4ebd0] border-[#c9a26d]'
+                        : 'bg-[#1f150e] text-[#dfcaab] border-[#3d2817] hover:bg-[#291b11]'
+                    }`}
+                  >
+                    <BookmarkCheck className="w-4 h-4" />
+                    <span>Sort #book-club</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsIgStudioOpen(true)}
+                    className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-[#875836] hover:bg-[#9c6640] text-[#f4ebd0] border border-[#c9a26d]/50 flex items-center gap-1.5 transition"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>IG Image Card</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Entry Composer Form */}
+            <form
+              onSubmit={handleSaveEntry}
+              className="bg-[#1f150e] border border-[#3d2817] rounded-xl p-4 sm:p-5 space-y-4"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs uppercase tracking-widest text-[#c9a26d] font-semibold">
+                  {editingEntryId ? 'Amend Entry' : 'New Entry'}
+                </span>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setNewIsPinned((prev) => !prev)}
+                    className={`px-2.5 py-1 rounded text-xs border flex items-center gap-1 transition ${
+                      newIsPinned
+                        ? 'bg-[#70492c] text-[#f4ebd0] border-[#c9a26d]'
+                        : 'bg-[#140d08] text-[#cbb292] border-[#3d2817]'
+                    }`}
+                  >
+                    <Pin className="w-3.5 h-3.5" />
+                    <span>{newIsPinned ? 'Pinned' : 'Pin Entry'}</span>
+                  </button>
+
+                  {editingEntryId && (
+                    <button
+                      type="button"
+                      onClick={resetComposer}
+                      className="text-xs text-[#b8976f] hover:text-[#f4ebd0]"
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Heading or passage title..."
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[#140d08] border border-[#3d2817] text-[#f4ebd0] placeholder-[#7c6041] focus:outline-none focus:border-[#c9a26d]"
+              />
+
+              {/* Markdown & Quote Toolbar */}
+              <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-2 rounded-lg bg-[#140d08] border border-[#3d2817]">
+                <span className="text-[11px] uppercase tracking-wider text-[#9c7d56] mr-1">
+                  Style:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => applyFormatSnippet('quote')}
+                  className="px-2.5 py-1 rounded text-xs bg-[#1f150e] hover:bg-[#291b11] border border-[#3d2817] text-[#dfcaab] flex items-center gap-1 transition"
+                  title="Insert quote block (> )"
+                >
+                  <Quote className="w-3.5 h-3.5 text-[#c9a26d]" />
+                  <span>Quote</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyFormatSnippet('bold')}
+                  className="px-2.5 py-1 rounded text-xs bg-[#1f150e] hover:bg-[#291b11] border border-[#3d2817] text-[#dfcaab] flex items-center gap-1 transition"
+                  title="Bold (**text**)"
+                >
+                  <Bold className="w-3.5 h-3.5 text-[#c9a26d]" />
+                  <span>Bold</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyFormatSnippet('italic')}
+                  className="px-2.5 py-1 rounded text-xs bg-[#1f150e] hover:bg-[#291b11] border border-[#3d2817] text-[#dfcaab] flex items-center gap-1 transition"
+                  title="Italic (*text*)"
+                >
+                  <Italic className="w-3.5 h-3.5 text-[#c9a26d]" />
+                  <span>Italic</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyFormatSnippet('citation')}
+                  className="px-2.5 py-1 rounded text-xs bg-[#1f150e] hover:bg-[#291b11] border border-[#3d2817] text-[#dfcaab] flex items-center gap-1 transition"
+                  title="Insert source line"
+                >
+                  <FileText className="w-3.5 h-3.5 text-[#c9a26d]" />
+                  <span>Source</span>
+                </button>
+              </div>
+
+              <textarea
+                ref={contentTextareaRef}
+                rows={4}
+                value={newContent}
+                onChange={(e) => setNewContent(e.target.value)}
+                placeholder="Inscribe thoughts, > quotes, **bold**, or *italics*..."
+                className="w-full px-3.5 py-2.5 rounded-lg bg-[#140d08] border border-[#3d2817] text-[#f4ebd0] placeholder-[#7c6041] focus:outline-none focus:border-[#c9a26d]"
+              />
+
+              {quickTags.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] uppercase tracking-wider text-[#b8976f]">
+                    Quick Tags:
+                  </span>
+                  {quickTags.map((qTag) => {
+                    const active = parseTagsInput(newTags).includes(qTag);
+                    return (
+                      <button
+                        key={qTag}
+                        type="button"
+                        onClick={() => toggleQuickTag(qTag)}
+                        className={`px-2.5 py-1 rounded text-xs border transition ${
+                          active
+                            ? 'bg-[#70492c] text-[#f4ebd0] border-[#c9a26d]'
+                            : 'bg-[#140d08] text-[#cbb292] border-[#3d2817] hover:border-[#70492c]'
+                        }`}
+                      >
+                        #{qTag}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#140d08] border border-[#3d2817]">
+                  <Tag className="w-4 h-4 text-[#b8976f] shrink-0" />
+                  <input
+                    type="text"
+                    value={newTags}
+                    onChange={(e) => setNewTags(e.target.value)}
+                    placeholder="Tags (comma separated, e.g. book-club, life)"
+                    className="w-full bg-transparent text-sm text-[#f4ebd0] placeholder-[#7c6041] focus:outline-none"
+                  />
+                </div>
+
+                <label className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[#140d08] border border-[#3d2817] text-xs text-[#dfcaab] cursor-pointer hover:border-[#70492c]">
+                  <span className="flex items-center gap-2 truncate">
+                    <ImageIcon className="w-4 h-4 text-[#c9a26d] shrink-0" />
+                    <span className="truncate">
+                      {imageFile
+                        ? imageFile.name
+                        : existingImageUrl
+                        ? 'Image attached'
+                        : 'Attach screenshot (or Ctrl+V)'}
+                    </span>
+                  </span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => attachImageFile(e.target.files?.[0])}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {(imagePreviewUrl || existingImageUrl) && (
+                <div className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-[#140d08] border border-[#3d2817]">
+                  <img
+                    src={imagePreviewUrl || existingImageUrl}
+                    alt="Composer preview"
+                    className="max-h-24 w-auto object-contain rounded"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImageFile(null);
+                      setImagePreviewUrl('');
+                      setExistingImageUrl('');
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    className="text-xs text-[#b8976f] hover:text-red-300 px-2 py-1"
+                  >
+                    Remove Image
+                  </button>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="px-5 py-2.5 rounded-lg bg-[#70492c] hover:bg-[#875836] disabled:opacity-50 text-sm font-semibold text-[#f4ebd0] transition"
+                >
+                  {isSaving
+                    ? 'Inscribing...'
+                    : editingEntryId
+                    ? 'Save Changes'
+                    : 'Inscribe Entry'}
+                </button>
+              </div>
+            </form>
+
+            {/* Search, Scope, Pin & Tag Filter Bar */}
+            <div className="bg-[#1f150e] border border-[#3d2817] rounded-xl p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row gap-2.5">
+                <div className="flex-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-[#140d08] border border-[#3d2817]">
+                  <Search className="w-4 h-4 text-[#b8976f] shrink-0" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={
+                      searchAllVolumes
+                        ? 'Search across all volumes...'
+                        : `Search in ${activeSectionObj?.name || activeTab}...`
+                    }
+                    className="w-full bg-transparent text-sm text-[#f4ebd0] placeholder-[#7c6041] focus:outline-none"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setPinnedOnly((prev) => !prev)}
+                  className={`px-3.5 py-2 rounded-lg text-xs font-medium border flex items-center justify-center gap-1.5 transition shrink-0 ${
+                    pinnedOnly
+                      ? 'bg-[#70492c] text-[#f4ebd0] border-[#c9a26d]'
+                      : 'bg-[#140d08] text-[#cbb292] border-[#3d2817] hover:text-[#f4ebd0]'
+                  }`}
+                >
+                  <Pin className="w-3.5 h-3.5" />
+                  <span>Pinned</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSearchAllVolumes((prev) => !prev)}
+                  className={`px-3.5 py-2 rounded-lg text-xs font-medium border flex items-center justify-center gap-1.5 transition shrink-0 ${
+                    searchAllVolumes
+                      ? 'bg-[#70492c] text-[#f4ebd0] border-[#c9a26d]'
+                      : 'bg-[#140d08] text-[#cbb292] border-[#3d2817] hover:text-[#f4ebd0]'
+                  }`}
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>{searchAllVolumes ? 'All Volumes' : 'This Volume'}</span>
+                </button>
+
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="px-3 py-2 rounded-lg bg-[#140d08] border border-[#3d2817] text-xs text-[#dfcaab] focus:outline-none"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="title">Title (A–Z)</option>
+                </select>
+              </div>
+
+              {availableTags.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTagFilter('ALL')}
+                    className={`px-2.5 py-1 rounded text-xs border transition ${
+                      selectedTagFilter === 'ALL'
+                        ? 'bg-[#70492c] text-[#f4ebd0] border-[#c9a26d]'
+                        : 'bg-[#140d08] text-[#b8976f] border-[#3d2817]'
+                    }`}
+                  >
+                    All Tags
+                  </button>
+                  {availableTags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() =>
+                        setSelectedTagFilter((prev) =>
+                          prev === tag ? 'ALL' : tag
+                        )
+                      }
+                      className={`px-2.5 py-1 rounded text-xs border transition ${
+                        selectedTagFilter === tag
+                          ? 'bg-[#70492c] text-[#f4ebd0] border-[#c9a26d]'
+                          : 'bg-[#140d08] text-[#cbb292] border-[#3d2817] hover:border-[#70492c]'
+                      }`}
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Entries List */}
+            <div className="space-y-4">
+              {filteredEntries.length === 0 ? (
+                <div className="bg-[#1f150e] border border-[#3d2817] rounded-xl p-8 text-center text-sm italic text-[#9c7d56]">
+                  No entries match your current filter.
+                </div>
+              ) : (
+                filteredEntries.map((item) => {
+                  const secKey = item._sectionId || activeTab;
+                  const secLabel =
+                    item._sectionLabel || activeSectionObj?.name || secKey;
+                  const isQueued = queuedIds.includes(item.id);
+                  const isCopied = copiedEntryId === item.id;
+
+                  return (
+                    <article
+                      key={`${secKey}-${item.id}`}
+                      className={`bg-[#1f150e] border rounded-xl p-5 space-y-3 ${
+                        item.isPinned ? 'border-[#c9a26d]' : 'border-[#3d2817]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-lg font-bold italic text-[#f4ebd0]">
+                              {item.title}
+                            </h3>
+                            {item.isPinned && (
+                              <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded bg-[#70492c] text-[#f4ebd0] flex items-center gap-1">
+                                <Pin className="w-3 h-3" />
+                                <span>Pinned</span>
+                              </span>
+                            )}
+                            <span className="text-xs px-2 py-0.5 rounded bg-[#140d08] border border-[#3d2817] text-[#b8976f]">
+                              {item.date}
+                            </span>
+                            {searchAllVolumes && item._sectionLabel && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveTab(secKey);
+                                  setSearchAllVolumes(false);
+                                }}
+                                className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded bg-[#2e1d12] text-[#e3be82] border border-[#70492c]/60 hover:underline"
+                              >
+                                {item._sectionLabel}
+                              </button>
+                            )}
+                          </div>
                         </div>
 
-                        <div className="flex sm:flex-col gap-2 shrink-0 self-end sm:self-start">
-                          {item.imageUrl && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePin(item, secKey)}
+                            className={`p-2 rounded border transition ${
+                              item.isPinned
+                                ? 'bg-[#70492c] border-[#c9a26d] text-[#f4ebd0]'
+                                : 'bg-[#140d08] border-[#3d2817] text-[#b8976f] hover:text-[#f4ebd0]'
+                            }`}
+                            title={item.isPinned ? 'Unpin entry' : 'Pin entry'}
+                            aria-label={
+                              item.isPinned ? 'Unpin entry' : 'Pin entry'
+                            }
+                          >
+                            <Pin className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCopyEntry(item, secLabel)}
+                            className={`px-2.5 py-1.5 rounded text-xs border flex items-center gap-1 transition ${
+                              isCopied
+                                ? 'bg-[#2b4228] text-[#e7f5e4] border-[#6a9c63]'
+                                : 'bg-[#140d08] text-[#dfcaab] border-[#3d2817] hover:text-[#f4ebd0]'
+                            }`}
+                            title="Copy formatted Markdown"
+                          >
+                            {isCopied ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-[#9ad690]" />
+                                <span>Copied</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5 text-[#c9a26d]" />
+                                <span>Copy</span>
+                              </>
+                            )}
+                          </button>
+
+                          {activeTab === 'books' && (
                             <button
                               type="button"
-                              onClick={() => setViewingImage({ src: item.imageUrl, title: item.title })}
-                              className="text-[#b8976f] hover:text-[#f4ebd0] p-2 rounded transition bg-[#140d08] border border-[#3d2817]"
-                              title="Maximize image"
-                              aria-label="Maximize image"
+                              onClick={() => toggleQueueForIg(item.id)}
+                              className={`px-2.5 py-1.5 rounded text-xs border transition ${
+                                isQueued
+                                  ? 'bg-[#70492c] text-[#f4ebd0] border-[#c9a26d]'
+                                  : 'bg-[#140d08] text-[#b8976f] border-[#3d2817] hover:text-[#f4ebd0]'
+                              }`}
                             >
-                              <Maximize2 className="w-4 h-4" />
+                              {isQueued ? 'Queued for IG' : 'Queue for IG'}
                             </button>
                           )}
+
                           <button
-                            onClick={() => handleEditClick(item)}
-                            className="text-[#b8976f] hover:text-[#f4ebd0] p-2 rounded transition bg-[#140d08] border border-[#3d2817]"
+                            type="button"
+                            onClick={() => handleStartEdit(item, secKey)}
+                            className="p-2 rounded bg-[#140d08] border border-[#3d2817] text-[#b8976f] hover:text-[#f4ebd0] transition"
                             title="Edit entry"
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>
+
                           <button
-                            onClick={() => handleDelete(activeTab, item.id)}
-                            className="text-[#8c6b48] hover:text-red-300 p-2 rounded transition bg-[#140d08] border border-[#3d2817]"
-                            title="Expunge entry"
+                            type="button"
+                            onClick={() => handleDeleteEntry(item.id, secKey)}
+                            className="p-2 rounded bg-[#140d08] border border-[#3d2817] text-[#b8976f] hover:text-red-300 transition"
+                            title="Delete entry"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
-                    );
-                  })
-                )}
-              </div>
+
+                      <FormattedEntryBody content={item.content} />
+
+                      {item.tags?.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {item.tags.map((tag) => (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => setSelectedTagFilter(tag)}
+                              className="text-xs px-2 py-0.5 rounded bg-[#140d08] text-[#c9a26d] border border-[#3d2817] hover:border-[#70492c]"
+                            >
+                              #{tag}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Minimized screenshot preview + Maximize2 button */}
+                      {item.imageUrl && (
+                        <div className="mt-3 pt-2.5 border-t border-[#3d2817]/60 flex items-center justify-between gap-3">
+                          <img
+                            src={item.imageUrl}
+                            alt={item.title || 'Entry screenshot'}
+                            onClick={() =>
+                              setViewingImage({
+                                src: item.imageUrl,
+                                title: item.title,
+                              })
+                            }
+                            className="max-h-40 w-auto object-contain rounded-lg border border-[#3d2817] bg-[#140d08] cursor-zoom-in"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setViewingImage({
+                                src: item.imageUrl,
+                                title: item.title,
+                              })
+                            }
+                            className="text-[#b8976f] hover:text-[#f4ebd0] p-2 rounded transition bg-[#140d08] border border-[#3d2817] shrink-0"
+                            title="View full image"
+                            aria-label="View full image"
+                          >
+                            <Maximize2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })
+              )}
             </div>
-          )}
-        </div>
+          </section>
+        )}
       </main>
 
-      {/* Full-Screen Image Viewer Modal */}
+      {/* Full-Screen Image Lightbox Modal */}
       {viewingImage && (
         <div
           onClick={() => setViewingImage(null)}
@@ -1283,7 +2340,6 @@ export default function App() {
                 </button>
               </div>
             </div>
-
             <div className="p-4 overflow-auto flex-1 flex items-center justify-center bg-[#140d08]">
               <img
                 src={viewingImage.src}
@@ -1295,55 +2351,66 @@ export default function App() {
         </div>
       )}
 
-      {/* Instagram Image Card Studio */}
+      {/* Instagram Post Card Studio Modal */}
       {isIgStudioOpen && (
-        <div className="fixed inset-0 z-50 bg-[#140d08]/90 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#1f150e] border-2 border-[#3d2817] rounded-xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 relative my-8">
-            <button
-              onClick={() => setIsIgStudioOpen(false)}
-              className="absolute top-6 right-6 text-[#8c6b48] hover:text-[#f4ebd0] transition"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div>
-              <h3 className="text-lg font-bold text-[#f4ebd0] italic">Instagram Post Card Studio</h3>
-              <p className="text-xs text-[#b8976f]">
-                Exporting {entriesForIgCard.length} #book-club {entriesForIgCard.length === 1 ? 'entry' : 'entries'} in Victorian folio style.
-              </p>
+        <div
+          onClick={() => setIsIgStudioOpen(false)}
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#1f150e] border-2 border-[#70492c] rounded-xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-5 space-y-4 shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-[#3d2817] pb-3">
+              <div>
+                <h3 className="text-lg font-bold italic text-[#f4ebd0]">
+                  Instagram Post Card Studio
+                </h3>
+                <p className="text-xs text-[#b8976f]">
+                  Export a #book-club entry as a downloadable PNG image.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsIgStudioOpen(false)}
+                className="p-1.5 rounded text-[#b8976f] hover:text-[#f4ebd0]"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {bookClubEntries.length > 0 && (
               <div>
-                <label className="block text-[10px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">Header Label</label>
-                <input
-                  type="text"
-                  value={igClubName}
-                  onChange={(e) => setIgClubName(e.target.value)}
-                  className="w-full bg-[#140d08] border border-[#3d2817] rounded-lg px-3 py-2 text-xs text-[#f4ebd0] focus:outline-none focus:border-[#70492c]"
-                />
+                <label className="block text-xs uppercase tracking-wider text-[#b8976f] mb-1">
+                  Entry
+                </label>
+                <select
+                  value={activeIgEntry?.id || ''}
+                  onChange={(e) => setSelectedIgEntryId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-[#140d08] border border-[#3d2817] text-sm text-[#f4ebd0]"
+                >
+                  {bookClubEntries.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title} ({item.date})
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">Book / Chapter / Page Note (Optional)</label>
-                <input
-                  type="text"
-                  value={igVolumeNote}
-                  onChange={(e) => setIgVolumeNote(e.target.value)}
-                  placeholder="e.g., Chapter IV · p. 84"
-                  className="w-full bg-[#140d08] border border-[#3d2817] rounded-lg px-3 py-2 text-xs text-[#f4ebd0] placeholder-[#70492c] focus:outline-none focus:border-[#70492c]"
-                />
-              </div>
-            </div>
+            )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[10px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">Format</label>
+                <label className="block text-xs uppercase tracking-wider text-[#b8976f] mb-1">
+                  Aspect Ratio
+                </label>
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => setIgFormat('square')}
-                    className={`flex-1 py-2 rounded-lg text-xs border transition ${
-                      igFormat === 'square' ? 'bg-[#3d2817] text-[#f4ebd0] border-[#8c6b48]' : 'bg-[#140d08] text-[#b8976f] border-[#3d2817]'
+                    className={`flex-1 py-2 rounded text-xs border ${
+                      igFormat === 'square'
+                        ? 'bg-[#70492c] text-[#f4ebd0] border-[#c9a26d]'
+                        : 'bg-[#140d08] text-[#cbb292] border-[#3d2817]'
                     }`}
                   >
                     1:1 Square
@@ -1351,83 +2418,62 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setIgFormat('portrait')}
-                    className={`flex-1 py-2 rounded-lg text-xs border transition ${
-                      igFormat === 'portrait' ? 'bg-[#3d2817] text-[#f4ebd0] border-[#8c6b48]' : 'bg-[#140d08] text-[#b8976f] border-[#3d2817]'
+                    className={`flex-1 py-2 rounded text-xs border ${
+                      igFormat === 'portrait'
+                        ? 'bg-[#70492c] text-[#f4ebd0] border-[#c9a26d]'
+                        : 'bg-[#140d08] text-[#cbb292] border-[#3d2817]'
                     }`}
                   >
                     4:5 Portrait
                   </button>
                 </div>
               </div>
+
               <div>
-                <label className="block text-[10px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">Victorian Tone</label>
-                <div className="flex gap-2">
-                  {Object.entries(IG_THEMES).map(([key, themeObj]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setIgTheme(key)}
-                      className={`flex-1 py-2 rounded-lg text-xs border transition ${
-                        igTheme === key ? 'bg-[#3d2817] text-[#f4ebd0] border-[#8c6b48]' : 'bg-[#140d08] text-[#b8976f] border-[#3d2817]'
-                      }`}
-                    >
-                      {themeObj.label}
-                    </button>
+                <label className="block text-xs uppercase tracking-wider text-[#b8976f] mb-1">
+                  Volume Tone
+                </label>
+                <select
+                  value={igTheme}
+                  onChange={(e) => setIgTheme(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-[#140d08] border border-[#3d2817] text-xs text-[#f4ebd0]"
+                >
+                  {Object.entries(IG_THEMES).map(([key, t]) => (
+                    <option key={key} value={key}>
+                      {t.label}
+                    </option>
                   ))}
-                </div>
+                </select>
               </div>
             </div>
 
-            {/* Live Card Preview */}
-            <div className="flex justify-center bg-[#140d08] p-4 rounded-xl border border-[#3d2817]">
-              <div
-                className={`w-full max-w-[360px] ${
-                  igFormat === 'portrait' ? 'aspect-[4/5]' : 'aspect-square'
-                } p-4 flex flex-col justify-between border-2 transition-colors ${activeIgTheme.previewClass}`}
-              >
-                <div>
-                  <div className={`flex items-center justify-between text-[10px] tracking-widest uppercase pb-1.5 border-b ${activeIgTheme.headerClass}`}>
-                    <span>{igClubName || 'BOOK CLUB CHRONICLE'}</span>
-                    <span className="italic">#book-club</span>
-                  </div>
-                  {igVolumeNote.trim() && (
-                    <div className={`text-[10px] italic mt-1 ${activeIgTheme.footerClass.split(' ')[0]}`}>
-                      {igVolumeNote.trim()}
-                    </div>
-                  )}
-
-                  <div className="mt-3 space-y-3 overflow-hidden">
-                    {entriesForIgCard.map(entry => (
-                      <div key={entry.id} className="space-y-1">
-                        <h4 className="text-xs font-bold italic leading-snug">{entry.title}</h4>
-                        <p className={`text-[11px] leading-relaxed line-clamp-4 ${activeIgTheme.bodyClass}`}>
-                          {entry.content}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className={`text-[10px] italic pt-2 border-t ${activeIgTheme.footerClass}`}>
-                  Commonplace Chronicle · Folio & Margin
-                </div>
-              </div>
+            <div>
+              <label className="block text-xs uppercase tracking-wider text-[#b8976f] mb-1">
+                Book / Chapter / Page Note (Optional)
+              </label>
+              <input
+                type="text"
+                value={igSourceNote}
+                onChange={(e) => setIgSourceNote(e.target.value)}
+                placeholder="e.g. Middlemarch • Ch. XIV, p. 142"
+                className="w-full px-3 py-2 rounded-lg bg-[#140d08] border border-[#3d2817] text-sm text-[#f4ebd0]"
+              />
             </div>
 
-            <div className="flex justify-end gap-3">
+            <div className="bg-[#140d08] border border-[#3d2817] rounded-lg p-3 flex justify-center">
+              <canvas
+                ref={igCanvasRef}
+                className="w-full max-w-sm h-auto rounded shadow-lg"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => setIsIgStudioOpen(false)}
-                className="px-4 py-2 rounded-lg text-xs font-medium bg-[#140d08] border border-[#3d2817] text-[#b8976f]"
+                onClick={handleDownloadIgPng}
+                className="px-4 py-2.5 rounded-lg bg-[#70492c] hover:bg-[#875836] text-xs font-semibold text-[#f4ebd0] flex items-center gap-1.5"
               >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={handleDownloadIgImage}
-                className="px-5 py-2.5 rounded-lg text-xs font-semibold bg-[#3d2817] hover:bg-[#4d3420] text-[#f4ebd0] border border-[#70492c] flex items-center space-x-2 transition shadow"
-              >
-                <Download className="w-4 h-4 text-[#dfcaab]" />
+                <Download className="w-4 h-4" />
                 <span>Download Instagram PNG</span>
               </button>
             </div>
@@ -1435,50 +2481,56 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal: Create New Section */}
+      {/* New Volume Modal */}
       {isSectionModalOpen && (
-        <div className="fixed inset-0 z-50 bg-[#140d08]/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#1f150e] border-2 border-[#3d2817] rounded-xl p-8 max-w-md w-full shadow-2xl space-y-6 relative">
-            <button 
-              onClick={() => setIsSectionModalOpen(false)}
-              className="absolute top-6 right-6 text-[#8c6b48] hover:text-[#f4ebd0] transition"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div>
-              <h3 className="text-lg font-bold text-[#f4ebd0] mb-1 italic">Establish New Log Volume</h3>
-              <p className="text-xs text-[#b8976f]">Add a custom register (e.g., Natural Philosophy, Cartography, Apothecary)</p>
+        <div
+          onClick={() => setIsSectionModalOpen(false)}
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+        >
+          <form
+            onSubmit={handleCreateSection}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#1f150e] border-2 border-[#70492c] rounded-xl max-w-sm w-full p-5 space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold italic text-[#f4ebd0]">
+                Create New Volume
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsSectionModalOpen(false)}
+                className="text-[#b8976f] hover:text-[#f4ebd0]"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <form onSubmit={handleAddSection} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1.5">Volume Title</label>
-                <input
-                  type="text"
-                  value={newSectionName}
-                  onChange={(e) => setNewSectionName(e.target.value)}
-                  placeholder="e.g. Natural Philosophy"
-                  className="w-full bg-[#140d08] border border-[#3d2817] rounded-lg px-4 py-2.5 text-xs text-[#f4ebd0] placeholder-[#70492c] focus:outline-none focus:border-[#70492c] transition shadow-inner"
-                  required
-                  autoFocus
-                />
-              </div>
-              <div className="flex justify-end space-x-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsSectionModalOpen(false)}
-                  className="px-4 py-2 rounded-lg text-xs font-medium bg-[#140d08] border border-[#3d2817] text-[#b8976f] hover:bg-[#261910] transition"
-                >
-                  Close
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-lg text-xs font-medium bg-[#3d2817] hover:bg-[#4d3420] text-[#f4ebd0] border border-[#70492c] transition shadow"
-                >
-                  Bind Volume
-                </button>
-              </div>
-            </form>
-          </div>
+
+            <input
+              type="text"
+              required
+              value={newSectionName}
+              onChange={(e) => setNewSectionName(e.target.value)}
+              placeholder="Volume name (e.g. Natural Philosophy)"
+              className="w-full px-3 py-2 rounded-lg bg-[#140d08] border border-[#3d2817] text-sm text-[#f4ebd0]"
+            />
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSectionModalOpen(false)}
+                className="px-3 py-1.5 rounded text-xs text-[#b8976f]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isCreatingSection}
+                className="px-4 py-1.5 rounded bg-[#70492c] hover:bg-[#875836] disabled:opacity-50 text-xs font-semibold text-[#f4ebd0]"
+              >
+                {isCreatingSection ? 'Saving...' : 'Create'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

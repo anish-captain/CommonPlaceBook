@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   BookOpen, Briefcase, GraduationCap, Activity, DollarSign, HeartPulse,
-  LayoutDashboard, Plus, Trash2, Sparkles, Search, Tag, FolderPlus, X, Feather, Image as ImageIcon, Edit3, LogOut, Menu, ArrowUpDown, CheckCircle2, Download, Camera 
+  LayoutDashboard, Plus, Trash2, Sparkles, Search, Tag, FolderPlus, X, Feather, Image as ImageIcon, Edit3, LogOut, Menu, ArrowUpDown, CheckCircle2, Download, Camera, Maximize2 
 } from 'lucide-react';
 
 // Initialize Supabase Client
@@ -22,6 +22,51 @@ const DEFAULT_SECTIONS = [
 const HEAD_PRESET_TAGS = {
   books: ['running-channel', 'work', 'life', 'book-club'],
   health: ['running-channel', 'life'],
+};
+
+const IG_THEMES = {
+  mahogany: {
+    label: 'Mahogany',
+    bgOuter: '#140d08',
+    bgCard: '#1f150e',
+    borderCol: '#70492c',
+    accentCol: '#c9a26d',
+    titleCol: '#f7efe0',
+    bodyCol: '#d6c4a5',
+    mutedCol: '#9c7d56',
+    previewClass: 'bg-[#1f150e] border-[#70492c] text-[#f7efe0]',
+    headerClass: 'text-[#c9a26d] border-[#70492c]/60',
+    bodyClass: 'text-[#d6c4a5]',
+    footerClass: 'text-[#9c7d56] border-[#70492c]/40',
+  },
+  parchment: {
+    label: 'Parchment',
+    bgOuter: '#e3d5b8',
+    bgCard: '#f5ecd8',
+    borderCol: '#7c5836',
+    accentCol: '#5c3a21',
+    titleCol: '#21140b',
+    bodyCol: '#3d2817',
+    mutedCol: '#70492c',
+    previewClass: 'bg-[#f5ecd8] border-[#7c5836] text-[#21140b]',
+    headerClass: 'text-[#5c3a21] border-[#7c5836]/60',
+    bodyClass: 'text-[#3d2817]',
+    footerClass: 'text-[#70492c] border-[#7c5836]/40',
+  },
+  library: {
+    label: 'Library Ink',
+    bgOuter: '#111412',
+    bgCard: '#191f1b',
+    borderCol: '#5c6b58',
+    accentCol: '#b7c4a8',
+    titleCol: '#eff3ea',
+    bodyCol: '#c8d1be',
+    mutedCol: '#88967c',
+    previewClass: 'bg-[#191f1b] border-[#5c6b58] text-[#eff3ea]',
+    headerClass: 'text-[#b7c4a8] border-[#5c6b58]/60',
+    bodyClass: 'text-[#c8d1be]',
+    footerClass: 'text-[#88967c] border-[#5c6b58]/40',
+  },
 };
 
 const ICON_MAP = {
@@ -62,7 +107,7 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 18) {
     }
 
     if (line) {
-      if (lineCount >= maxLines - 1 && (p < paragraphs.length - 1)) {
+      if (lineCount >= maxLines - 1 && p < paragraphs.length - 1) {
         ctx.fillText(`${line.slice(0, Math.max(0, line.length - 3))}...`, x, currentY);
         return currentY + lineHeight;
       }
@@ -104,6 +149,7 @@ export default function App() {
   const [newContent, setNewContent] = useState('');
   const [newTags, setNewTags] = useState('');
   const [imageFile, setImageFile] = useState(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
   const [selectedSection, setSelectedSection] = useState('work');
   const fileInputRef = useRef(null);
   
@@ -113,14 +159,18 @@ export default function App() {
   // Search, Tag Filter, Sorting & Book Club Selection
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTagFilter, setSelectedTagFilter] = useState('ALL');
-  const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'oldest' | 'title'
+  const [sortOrder, setSortOrder] = useState('newest');
   const [selectedBookClubIds, setSelectedBookClubIds] = useState([]);
 
-  // Phase 3: Instagram Card Studio State
+  // Instagram Card Studio State
   const [isIgStudioOpen, setIsIgStudioOpen] = useState(false);
   const [igFormat, setIgFormat] = useState('square'); // 'square' (1080x1080) | 'portrait' (1080x1350)
-  const [igTheme, setIgTheme] = useState('mahogany'); // 'mahogany' | 'parchment'
-  const [igClubName, setIgClubName] = useState('BOOK CLUB NOTES');
+  const [igTheme, setIgTheme] = useState('mahogany'); // 'mahogany' | 'parchment' | 'library'
+  const [igClubName, setIgClubName] = useState('BOOK CLUB CHRONICLE');
+  const [igVolumeNote, setIgVolumeNote] = useState('');
+
+  // Full-Screen Image Viewer State
+  const [viewingImage, setViewingImage] = useState(null); // { src, title }
 
   // New Section Modal
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
@@ -134,7 +184,6 @@ export default function App() {
     .map(normalizeTag)
     .filter(Boolean);
 
-  // Check Supabase Auth Session
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -148,7 +197,6 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch entries from Supabase when logged in
   useEffect(() => {
     if (!session || !supabase) return;
     fetchUserData();
@@ -232,9 +280,32 @@ export default function App() {
     setNewContent('');
     setNewTags('');
     setImageFile(null);
+    setImagePreviewUrl('');
     setEditingEntryId(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const attachImageFile = (file) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    setImageFile(file);
+    setImagePreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handlePasteImage = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const blob = items[i].getAsFile();
+        if (blob) {
+          const ext = blob.type.split('/')[1] || 'png';
+          const pastedFile = new File([blob], `pasted-${Date.now()}.${ext}`, { type: blob.type });
+          attachImageFile(pastedFile);
+        }
+        break;
+      }
     }
   };
 
@@ -258,14 +329,20 @@ export default function App() {
 
     const targetSection = editingEntryId ? selectedSection : activeTab;
 
-    let imageUrl = null;
+    let finalImageUrl = imagePreviewUrl || null;
     if (imageFile && supabase) {
-      const fileExt = imageFile.name.split('.').pop();
+      const fileExt = imageFile.name.split('.').pop() || 'png';
       const fileName = `${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('screenshots').upload(fileName, imageFile);
+      const { error: uploadError } = await supabase.storage
+        .from('screenshots')
+        .upload(fileName, imageFile);
       if (!uploadError) {
-        const { data: publicUrlData } = supabase.storage.from('screenshots').getPublicUrl(fileName);
-        imageUrl = publicUrlData.publicUrl;
+        const { data: publicUrlData } = supabase.storage
+          .from('screenshots')
+          .getPublicUrl(fileName);
+        if (publicUrlData?.publicUrl) {
+          finalImageUrl = publicUrlData.publicUrl;
+        }
       }
     }
 
@@ -285,7 +362,7 @@ export default function App() {
         title: newTitle.trim(),
         content: newContent.trim(),
         tags: formattedTags,
-        ...(imageUrl && { image_url: imageUrl })
+        ...(finalImageUrl && { image_url: finalImageUrl })
       };
 
       if (supabase && session) {
@@ -296,7 +373,7 @@ export default function App() {
         ...prev,
         [targetSection]: (prev[targetSection] || []).map(item =>
           item.id === editingEntryId
-            ? { ...item, ...updatedItem, imageUrl: imageUrl || item.imageUrl }
+            ? { ...item, ...updatedItem, imageUrl: finalImageUrl || item.imageUrl }
             : item
         )
       }));
@@ -306,7 +383,7 @@ export default function App() {
         title: newTitle.trim(),
         content: newContent.trim(),
         tags: formattedTags,
-        imageUrl,
+        imageUrl: finalImageUrl,
         date: dateStr,
       };
 
@@ -336,6 +413,8 @@ export default function App() {
     setNewTitle(item.title);
     setNewContent(item.content);
     setNewTags(item.tags ? item.tags.join(', ') : '');
+    setImageFile(null);
+    setImagePreviewUrl('');
     setEditingEntryId(item.id);
     setSelectedSection(activeTab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -373,6 +452,13 @@ export default function App() {
     );
   };
 
+  const jumpToSectionWithTag = (sectionId, tag) => {
+    setActiveTab(sectionId);
+    setSelectedSection(sectionId);
+    setSelectedTagFilter(tag);
+    setSearchQuery('');
+  };
+
   const currentEntries = entries[activeTab] || [];
 
   const availableSectionTags = Array.from(
@@ -401,58 +487,70 @@ export default function App() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const isMahogany = igTheme === 'mahogany';
-    const bgOuter = isMahogany ? '#140d08' : '#e8dcc4';
-    const bgCard = isMahogany ? '#1f150e' : '#f4ebd6';
-    const borderCol = isMahogany ? '#70492c' : '#8c6b48';
-    const accentCol = isMahogany ? '#c9a26d' : '#5c3a21';
-    const titleCol = isMahogany ? '#f7efe0' : '#24160d';
-    const bodyCol = isMahogany ? '#d6c4a5' : '#3d2817';
-    const mutedCol = isMahogany ? '#9c7d56' : '#70492c';
+    const theme = IG_THEMES[igTheme] || IG_THEMES.mahogany;
 
-    // Outer & Inner Victorian Frame
-    ctx.fillStyle = bgOuter;
+    ctx.fillStyle = theme.bgOuter;
     ctx.fillRect(0, 0, width, height);
 
-    const pad = 54;
-    ctx.fillStyle = bgCard;
+    const pad = 52;
+    ctx.fillStyle = theme.bgCard;
     ctx.fillRect(pad, pad, width - pad * 2, height - pad * 2);
 
-    ctx.strokeStyle = borderCol;
+    ctx.strokeStyle = theme.borderCol;
     ctx.lineWidth = 4;
-    ctx.strokeRect(pad + 18, pad + 18, width - (pad + 18) * 2, height - (pad + 18) * 2);
+    ctx.strokeRect(pad + 16, pad + 16, width - (pad + 16) * 2, height - (pad + 16) * 2);
 
-    // Header Label
-    ctx.fillStyle = accentCol;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(pad + 26, pad + 26, width - (pad + 26) * 2, height - (pad + 26) * 2);
+
+    ctx.fillStyle = theme.accentCol;
     ctx.font = '600 24px Georgia, serif';
-    ctx.fillText((igClubName || 'BOOK CLUB NOTES').toUpperCase(), 110, 145);
+    ctx.fillText((igClubName || 'BOOK CLUB CHRONICLE').toUpperCase(), 112, 146);
 
-    ctx.fillStyle = mutedCol;
+    ctx.fillStyle = theme.mutedCol;
     ctx.font = 'italic 22px Georgia, serif';
-    ctx.fillText('#book-club', width - 235, 145);
+    ctx.fillText('#book-club', width - 235, 146);
 
-    // Divider rule
-    ctx.strokeStyle = borderCol;
+    let cursorY = 176;
+    if (igVolumeNote.trim()) {
+      ctx.fillStyle = theme.mutedCol;
+      ctx.font = 'italic 22px Georgia, serif';
+      ctx.fillText(igVolumeNote.trim(), 112, cursorY + 4);
+      cursorY += 34;
+    }
+
+    const ruleY = cursorY + 6;
+    ctx.strokeStyle = theme.borderCol;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(110, 175);
-    ctx.lineTo(width - 110, 175);
+    ctx.moveTo(112, ruleY);
+    ctx.lineTo(width / 2 - 22, ruleY);
+    ctx.moveTo(width / 2 + 22, ruleY);
+    ctx.lineTo(width - 112, ruleY);
     ctx.stroke();
 
-    // Render selected entries onto the card
-    let cursorY = 235;
-    const maxTextWidth = width - 220;
+    ctx.fillStyle = theme.accentCol;
+    ctx.beginPath();
+    ctx.moveTo(width / 2, ruleY - 7);
+    ctx.lineTo(width / 2 + 8, ruleY);
+    ctx.lineTo(width / 2, ruleY + 7);
+    ctx.lineTo(width / 2 - 8, ruleY);
+    ctx.closePath();
+    ctx.fill();
+
+    cursorY = ruleY + 56;
+    const maxTextWidth = width - 224;
     const cardCount = entriesForIgCard.length;
 
     entriesForIgCard.forEach((entry, idx) => {
-      if (cursorY > height - 180) return;
+      if (cursorY > height - 185) return;
 
-      ctx.fillStyle = titleCol;
+      ctx.fillStyle = theme.titleCol;
       ctx.font = cardCount === 1 ? 'italic bold 44px Georgia, serif' : 'italic bold 32px Georgia, serif';
       cursorY = wrapCanvasText(
         ctx,
         entry.title,
-        110,
+        112,
         cursorY,
         maxTextWidth,
         cardCount === 1 ? 56 : 42,
@@ -460,18 +558,18 @@ export default function App() {
       );
 
       if (entry.date) {
-        ctx.fillStyle = mutedCol;
+        ctx.fillStyle = theme.mutedCol;
         ctx.font = '20px Georgia, serif';
-        ctx.fillText(entry.date, 110, cursorY + 4);
+        ctx.fillText(entry.date, 112, cursorY + 4);
         cursorY += 42;
       }
 
-      ctx.fillStyle = bodyCol;
+      ctx.fillStyle = theme.bodyCol;
       ctx.font = cardCount === 1 ? '32px Georgia, serif' : '25px Georgia, serif';
       cursorY = wrapCanvasText(
         ctx,
         entry.content,
-        110,
+        112,
         cursorY + 6,
         maxTextWidth,
         cardCount === 1 ? 46 : 35,
@@ -480,24 +578,31 @@ export default function App() {
 
       if (idx < cardCount - 1 && cursorY < height - 210) {
         cursorY += 16;
-        ctx.strokeStyle = borderCol;
+        ctx.strokeStyle = theme.borderCol;
         ctx.globalAlpha = 0.45;
         ctx.beginPath();
-        ctx.moveTo(110, cursorY);
-        ctx.lineTo(width - 110, cursorY);
+        ctx.moveTo(112, cursorY);
+        ctx.lineTo(width - 112, cursorY);
         ctx.stroke();
         ctx.globalAlpha = 1;
         cursorY += 36;
       }
     });
 
-    // Footer
-    ctx.fillStyle = mutedCol;
+    ctx.strokeStyle = theme.borderCol;
+    ctx.globalAlpha = 0.45;
+    ctx.beginPath();
+    ctx.moveTo(112, height - 142);
+    ctx.lineTo(width - 112, height - 142);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = theme.mutedCol;
     ctx.font = 'italic 22px Georgia, serif';
-    ctx.fillText('Commonplace Chronicle', 110, height - 102);
+    ctx.fillText('Commonplace Chronicle · Folio & Margin', 112, height - 100);
 
     const link = document.createElement('a');
-    link.download = `book-club-instagram-${igFormat}-${Date.now()}.png`;
+    link.download = `book-club-instagram-${igTheme}-${igFormat}-${Date.now()}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
   };
@@ -518,7 +623,6 @@ export default function App() {
       return Number(b.id) - Number(a.id);
     });
 
-  // If user is not logged in, show Login Screen
   if (supabase && !session) {
     return (
       <div className="min-h-screen bg-[#14100c] text-[#d4c3a3] flex items-center justify-center p-6 font-serif">
@@ -588,8 +692,13 @@ export default function App() {
     );
   }
 
+  const activeIgTheme = IG_THEMES[igTheme] || IG_THEMES.mahogany;
+
   return (
-    <div className="min-h-screen bg-[#14100c] text-[#d4c3a3] flex flex-col md:flex-row font-serif selection:bg-[#5c3a21] selection:text-[#f4ebd0]">
+    <div
+      onPaste={handlePasteImage}
+      className="min-h-screen bg-[#14100c] text-[#d4c3a3] flex flex-col md:flex-row font-serif selection:bg-[#5c3a21] selection:text-[#f4ebd0]"
+    >
       
       {/* Mobile Header Bar */}
       <div className="md:hidden bg-[#1f150e] border-b-2 border-[#3d2817] p-4 flex items-center justify-between sticky top-0 z-30">
@@ -731,11 +840,24 @@ export default function App() {
                     <div key={sec.id} className="bg-[#1f150e] border-2 border-[#3d2817] rounded-xl p-6 sm:p-7 flex flex-col justify-between transition hover:border-[#523720] shadow-xl relative">
                       <div className="absolute top-3 right-4 text-[10px] text-[#70492c] font-mono">EST. 1890</div>
                       <div>
-                        <div className="flex items-center space-x-2.5 text-[#b8976f] mb-4">
-                          <div className="w-8 h-8 rounded bg-[#140d08] border border-[#3d2817] flex items-center justify-center">
-                            <IconComponent className="w-4 h-4 text-[#dfcaab]" />
+                        <div className="flex items-center justify-between text-[#b8976f] mb-4">
+                          <div className="flex items-center space-x-2.5">
+                            <div className="w-8 h-8 rounded bg-[#140d08] border border-[#3d2817] flex items-center justify-center">
+                              <IconComponent className="w-4 h-4 text-[#dfcaab]" />
+                            </div>
+                            <span className="font-semibold text-xs tracking-wider uppercase text-[#d4c3a3]">{sec.name}</span>
                           </div>
-                          <span className="font-semibold text-xs tracking-wider uppercase text-[#d4c3a3]">{sec.name}</span>
+                          {item?.imageUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingImage({ src: item.imageUrl, title: item.title })}
+                              className="text-[#b8976f] hover:text-[#f4ebd0] p-1.5 rounded transition bg-[#140d08] border border-[#3d2817]"
+                              title="Maximize image"
+                              aria-label="Maximize image"
+                            >
+                              <Maximize2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                         {item ? (
                           <div className="space-y-3">
@@ -745,14 +867,35 @@ export default function App() {
                             </div>
                             <p className="text-[#c5b395] text-sm leading-relaxed whitespace-pre-wrap">{item.content}</p>
                             {item.imageUrl && (
-                              <img src={item.imageUrl} alt="attachment" className="rounded-lg border border-[#3d2817] max-h-48 object-cover mt-2 w-full" />
+                              <div className="mt-3 pt-2.5 border-t border-[#3d2817]/60 flex items-center justify-between gap-3">
+                                <img
+                                  src={item.imageUrl}
+                                  alt={item.title || 'Entry screenshot'}
+                                  onClick={() => setViewingImage({ src: item.imageUrl, title: item.title })}
+                                  className="max-h-36 w-auto object-contain rounded-lg border border-[#3d2817] bg-[#140d08] cursor-zoom-in"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setViewingImage({ src: item.imageUrl, title: item.title })}
+                                  className="text-[#b8976f] hover:text-[#f4ebd0] p-2 rounded transition bg-[#140d08] border border-[#3d2817] shrink-0"
+                                  title="Maximize image"
+                                  aria-label="Maximize image"
+                                >
+                                  <Maximize2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             )}
                             {item.tags && item.tags.length > 0 && (
                               <div className="flex flex-wrap gap-1.5 pt-2">
                                 {item.tags.map(t => (
-                                  <span key={t} className="text-[10px] font-medium bg-[#140d08] text-[#b8976f] border border-[#3d2817] px-2 py-0.5 rounded">
+                                  <button
+                                    key={t}
+                                    type="button"
+                                    onClick={() => jumpToSectionWithTag(sec.id, t)}
+                                    className="text-[10px] font-medium bg-[#140d08] text-[#b8976f] hover:text-[#f4ebd0] border border-[#3d2817] px-2 py-0.5 rounded transition"
+                                  >
                                     #{t}
-                                  </span>
+                                  </button>
                                 ))}
                               </div>
                             )}
@@ -847,8 +990,8 @@ export default function App() {
                       onChange={(e) => setNewContent(e.target.value)}
                       placeholder={
                         activeTab === 'work'
-                          ? 'Write your normal work entry here...'
-                          : 'Inscribe your thoughts or procedures...'
+                          ? 'Write your normal work entry here (you can also paste a screenshot with Ctrl+V)...'
+                          : 'Inscribe your thoughts or procedures (you can also paste a screenshot with Ctrl+V)...'
                       }
                       rows="3"
                       className="w-full bg-[#140d08] border border-[#3d2817] rounded-lg px-4 py-2.5 text-xs text-[#f4ebd0] placeholder-[#70492c] focus:outline-none focus:border-[#70492c] resize-none"
@@ -856,17 +999,32 @@ export default function App() {
                     />
                   </div>
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-1">
-                    <label className="flex items-center space-x-2 text-xs text-[#b8976f] cursor-pointer bg-[#140d08] border border-[#3d2817] px-3 py-2 rounded-lg hover:border-[#70492c] transition">
-                      <ImageIcon className="w-4 h-4 text-[#b8976f]" />
-                      <span className="truncate max-w-[200px]">{imageFile ? imageFile.name : 'Attach Screenshot'}</span>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setImageFile(e.target.files[0] || null)}
-                        className="hidden"
-                      />
-                    </label>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label className="flex items-center space-x-2 text-xs text-[#b8976f] cursor-pointer bg-[#140d08] border border-[#3d2817] px-3 py-2 rounded-lg hover:border-[#70492c] transition">
+                        <ImageIcon className="w-4 h-4 text-[#b8976f]" />
+                        <span className="truncate max-w-[200px]">{imageFile ? imageFile.name : 'Attach or Paste Screenshot'}</span>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => attachImageFile(e.target.files[0] || null)}
+                          className="hidden"
+                        />
+                      </label>
+                      {imageFile && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImageFile(null);
+                            setImagePreviewUrl('');
+                            if (fileInputRef.current) fileInputRef.current.value = '';
+                          }}
+                          className="text-xs text-[#8c6b48] hover:text-[#f4ebd0] px-2 py-1"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
 
                     <div className="flex space-x-2 w-full sm:w-auto">
                       {editingEntryId && (
@@ -996,7 +1154,7 @@ export default function App() {
                           isSelectedForPost ? 'border-[#8c6b48]' : 'border-[#3d2817]'
                         }`}
                       >
-                        <div className="space-y-2 max-w-2xl flex-1">
+                        <div className="space-y-2 max-w-3xl flex-1 w-full">
                           <div className="flex items-center space-x-3 flex-wrap gap-y-1">
                             <h3 className="text-base font-bold text-[#f4ebd0] italic">{item.title}</h3>
                             <span className="text-[11px] text-[#8c6b48] bg-[#140d08] px-2 py-0.5 rounded border border-[#3d2817]">{item.date}</span>
@@ -1015,12 +1173,30 @@ export default function App() {
                               </button>
                             )}
                           </div>
+
                           <p className="text-[#c5b395] text-xs sm:text-sm whitespace-pre-wrap leading-relaxed pt-1">{item.content}</p>
+
+                          {/* Minimized image below message text; expands to full view on Maximize */}
                           {item.imageUrl && (
-                            <div className="pt-2">
-                              <img src={item.imageUrl} alt="attachment" className="rounded-lg border border-[#3d2817] max-h-64 object-cover" />
+                            <div className="mt-3 pt-2.5 border-t border-[#3d2817]/60 flex items-center justify-between gap-3">
+                              <img
+                                src={item.imageUrl}
+                                alt={item.title || 'Entry screenshot'}
+                                onClick={() => setViewingImage({ src: item.imageUrl, title: item.title })}
+                                className="max-h-40 w-auto object-contain rounded-lg border border-[#3d2817] bg-[#140d08] cursor-zoom-in"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setViewingImage({ src: item.imageUrl, title: item.title })}
+                                className="text-[#b8976f] hover:text-[#f4ebd0] p-2 rounded transition bg-[#140d08] border border-[#3d2817] shrink-0"
+                                title="Maximize image"
+                                aria-label="Maximize image"
+                              >
+                                <Maximize2 className="w-4 h-4" />
+                              </button>
                             </div>
                           )}
+
                           {item.tags && item.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1.5 pt-2">
                               {item.tags.map(t => (
@@ -1036,7 +1212,19 @@ export default function App() {
                             </div>
                           )}
                         </div>
+
                         <div className="flex sm:flex-col gap-2 shrink-0 self-end sm:self-start">
+                          {item.imageUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setViewingImage({ src: item.imageUrl, title: item.title })}
+                              className="text-[#b8976f] hover:text-[#f4ebd0] p-2 rounded transition bg-[#140d08] border border-[#3d2817]"
+                              title="Maximize image"
+                              aria-label="Maximize image"
+                            >
+                              <Maximize2 className="w-4 h-4" />
+                            </button>
+                          )}
                           <button
                             onClick={() => handleEditClick(item)}
                             className="text-[#b8976f] hover:text-[#f4ebd0] p-2 rounded transition bg-[#140d08] border border-[#3d2817]"
@@ -1062,7 +1250,52 @@ export default function App() {
         </div>
       </main>
 
-      {/* Phase 3 Modal: Instagram Image Card Studio */}
+      {/* Full-Screen Image Viewer Modal */}
+      {viewingImage && (
+        <div
+          onClick={() => setViewingImage(null)}
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#1f150e] border-2 border-[#70492c] rounded-xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl"
+          >
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#3d2817] bg-[#140d08]">
+              <h3 className="text-sm font-bold text-[#f4ebd0] italic truncate">
+                {viewingImage.title || 'Screenshot Viewer'}
+              </h3>
+              <div className="flex items-center gap-3">
+                <a
+                  href={viewingImage.src}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-[#dfcaab] hover:underline"
+                >
+                  Open in New Tab
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setViewingImage(null)}
+                  className="text-[#b8976f] hover:text-[#f4ebd0] p-1 rounded"
+                  aria-label="Close image viewer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 overflow-auto flex-1 flex items-center justify-center bg-[#140d08]">
+              <img
+                src={viewingImage.src}
+                alt={viewingImage.title || 'Full screenshot'}
+                className="max-w-full max-h-[75vh] w-auto h-auto object-contain rounded"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Instagram Image Card Studio */}
       {isIgStudioOpen && (
         <div className="fixed inset-0 z-50 bg-[#140d08]/90 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#1f150e] border-2 border-[#3d2817] rounded-xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 relative my-8">
@@ -1076,11 +1309,11 @@ export default function App() {
             <div>
               <h3 className="text-lg font-bold text-[#f4ebd0] italic">Instagram Post Card Studio</h3>
               <p className="text-xs text-[#b8976f]">
-                Exporting {entriesForIgCard.length} #book-club {entriesForIgCard.length === 1 ? 'entry' : 'entries'} as a downloadable PNG image.
+                Exporting {entriesForIgCard.length} #book-club {entriesForIgCard.length === 1 ? 'entry' : 'entries'} in Victorian folio style.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">Header Label</label>
                 <input
@@ -1090,6 +1323,19 @@ export default function App() {
                   className="w-full bg-[#140d08] border border-[#3d2817] rounded-lg px-3 py-2 text-xs text-[#f4ebd0] focus:outline-none focus:border-[#70492c]"
                 />
               </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">Book / Chapter / Page Note (Optional)</label>
+                <input
+                  type="text"
+                  value={igVolumeNote}
+                  onChange={(e) => setIgVolumeNote(e.target.value)}
+                  placeholder="e.g., Chapter IV · p. 84"
+                  className="w-full bg-[#140d08] border border-[#3d2817] rounded-lg px-3 py-2 text-xs text-[#f4ebd0] placeholder-[#70492c] focus:outline-none focus:border-[#70492c]"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">Format</label>
                 <div className="flex gap-2">
@@ -1114,26 +1360,20 @@ export default function App() {
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">Card Tone</label>
+                <label className="block text-[10px] font-semibold text-[#8c6b48] uppercase tracking-wider mb-1">Victorian Tone</label>
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIgTheme('mahogany')}
-                    className={`flex-1 py-2 rounded-lg text-xs border transition ${
-                      igTheme === 'mahogany' ? 'bg-[#3d2817] text-[#f4ebd0] border-[#8c6b48]' : 'bg-[#140d08] text-[#b8976f] border-[#3d2817]'
-                    }`}
-                  >
-                    Mahogany
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIgTheme('parchment')}
-                    className={`flex-1 py-2 rounded-lg text-xs border transition ${
-                      igTheme === 'parchment' ? 'bg-[#3d2817] text-[#f4ebd0] border-[#8c6b48]' : 'bg-[#140d08] text-[#b8976f] border-[#3d2817]'
-                    }`}
-                  >
-                    Parchment
-                  </button>
+                  {Object.entries(IG_THEMES).map(([key, themeObj]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setIgTheme(key)}
+                      className={`flex-1 py-2 rounded-lg text-xs border transition ${
+                        igTheme === key ? 'bg-[#3d2817] text-[#f4ebd0] border-[#8c6b48]' : 'bg-[#140d08] text-[#b8976f] border-[#3d2817]'
+                      }`}
+                    >
+                      {themeObj.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -1143,27 +1383,24 @@ export default function App() {
               <div
                 className={`w-full max-w-[360px] ${
                   igFormat === 'portrait' ? 'aspect-[4/5]' : 'aspect-square'
-                } p-4 flex flex-col justify-between border-2 transition-colors ${
-                  igTheme === 'mahogany'
-                    ? 'bg-[#1f150e] border-[#70492c] text-[#f4ebd0]'
-                    : 'bg-[#f4ebd6] border-[#8c6b48] text-[#24160d]'
-                }`}
+                } p-4 flex flex-col justify-between border-2 transition-colors ${activeIgTheme.previewClass}`}
               >
                 <div>
-                  <div className={`flex items-center justify-between text-[10px] tracking-widest uppercase pb-2 border-b ${
-                    igTheme === 'mahogany' ? 'text-[#c9a26d] border-[#70492c]/60' : 'text-[#5c3a21] border-[#8c6b48]/60'
-                  }`}>
-                    <span>{igClubName || 'BOOK CLUB NOTES'}</span>
+                  <div className={`flex items-center justify-between text-[10px] tracking-widest uppercase pb-1.5 border-b ${activeIgTheme.headerClass}`}>
+                    <span>{igClubName || 'BOOK CLUB CHRONICLE'}</span>
                     <span className="italic">#book-club</span>
                   </div>
+                  {igVolumeNote.trim() && (
+                    <div className={`text-[10px] italic mt-1 ${activeIgTheme.footerClass.split(' ')[0]}`}>
+                      {igVolumeNote.trim()}
+                    </div>
+                  )}
 
                   <div className="mt-3 space-y-3 overflow-hidden">
                     {entriesForIgCard.map(entry => (
                       <div key={entry.id} className="space-y-1">
                         <h4 className="text-xs font-bold italic leading-snug">{entry.title}</h4>
-                        <p className={`text-[11px] leading-relaxed line-clamp-4 ${
-                          igTheme === 'mahogany' ? 'text-[#d6c4a5]' : 'text-[#3d2817]'
-                        }`}>
+                        <p className={`text-[11px] leading-relaxed line-clamp-4 ${activeIgTheme.bodyClass}`}>
                           {entry.content}
                         </p>
                       </div>
@@ -1171,10 +1408,8 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className={`text-[10px] italic pt-2 border-t ${
-                  igTheme === 'mahogany' ? 'text-[#9c7d56] border-[#70492c]/40' : 'text-[#70492c] border-[#8c6b48]/40'
-                }`}>
-                  Commonplace Chronicle
+                <div className={`text-[10px] italic pt-2 border-t ${activeIgTheme.footerClass}`}>
+                  Commonplace Chronicle · Folio & Margin
                 </div>
               </div>
             </div>
